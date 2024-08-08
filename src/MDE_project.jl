@@ -1,5 +1,5 @@
 module MDE_project
 
-greet() = print("Hello World!")
+include("multiscale_processes.jl")
 
-end # module MDE_project
+end

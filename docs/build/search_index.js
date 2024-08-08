@@ -1,3 +1,3 @@
 var documenterSearchIndex = {"docs":
-[{"location":"","page":"-","title":"-","text":"Hi","category":"page"}]
+[{"location":"","page":"Home","title":"Home","text":"Hi","category":"page"}]
 }
