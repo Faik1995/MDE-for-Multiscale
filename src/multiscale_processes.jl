@@ -9,7 +9,10 @@
 # Jaroslav Borodavka, 15.04.2024
 
 # required packages
-using HCubature, DifferentialEquations, LaTeXStrings, CairoMakie
+using CairoMakie
+using DifferentialEquations
+using HCubature
+using LaTeXStrings
 
 ########################################################################################################
 ## functions for the realization of multiscale and effective processes, different examples
@@ -18,17 +21,43 @@ using HCubature, DifferentialEquations, LaTeXStrings, CairoMakie
 ## Fast Ornstein-Uhlenbeck ##
 
 # general multiscale system for fast Ornstein-Uhlenbeck process
-"""
-    Fast_OU_eps(x, y, z...)
+# @doc raw""" """ is a combo to avoid escaping latex commands like as \\ϵilon
+@doc raw"""
+    Fast_OU_ϵ(x0, y0; <keyword arguments>)
 
-Multiplication operator. `x * y * z *...` calls this function with multiple
-arguments, i.e. `*(x, y, z...)`.
+Return a two-dimensional fast-slow Ornstein-Uhlenbeck process starting at `(x0, y0)` as a discretized time series.
+
+The corresponding stochastic differential equation is
+```math
+\begin{aligned}
+  dX_ϵ(t) &= \left( \frac{1}{ϵ} σ(X_ϵ(t)) Y_ϵ(t) + h(X_ϵ(t), Y_ϵ(t)) - σ'(X_ϵ(t))σ(X_ϵ(t)) \right) dt, \quad &X_ϵ(0) = x_0, \\
+  dY_ϵ(t) &= -\frac{1}{ϵ^2} Y_ϵ(t) + \frac{\sqrt{2}}{ϵ} dV_t, \quad &Y_ϵ(0) = y_0.
+\end{aligned}
+```
+Here is ``σ'`` the first derivative of ``σ``. A simple Euler-Maruyama discretization is implemented for the generation of the time series.
+
+---
+# Arguments
+- `x0::Real`:         initial point ``x_0`` of slow process ``X_ϵ``.
+- `y0::Real`:         initial point ``y_0`` of fast process ``Y_ϵ``.
+- `func_config`:      collection of the functions ``h, σ`` and ``σ'`` as a tuple.
+- `ϵ::Real=0.1`:      small scale parameter ``ϵ``.
+- `T::Real=100`:      time horizon of time series.
+- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyma scheme.
+
+---
+# Examples
+```julia-repl
+julia> h = x -> -x
+julia> σ = x -> sqrt(2)
+julia> σ_prime = x -> 0
+julia> Fast_OU_ϵ(1.0, 1.0, func_config=(h, σ, σ_prime))
+```
 """
-function Fast_OU_eps(;x0, y0, func_config, eps=0.1, T=100, dt=0.001)
-  
+function Fast_OU_ϵ(x0, y0; func_config, ϵ=0.1, T=100, dt=1e-3)
     h = func_config[1]
-    sigma = func_config[2]
-    sigma_prime = func_config[3]
+    σ = func_config[2]
+    σ_prime = func_config[3]
 
     N = convert(Int64, T/dt) - 1
   
@@ -39,8 +68,8 @@ function Fast_OU_eps(;x0, y0, func_config, eps=0.1, T=100, dt=0.001)
     
     for k in 1:N
       dW = sqrt(dt)*randn(1)[1]
-      X[k+1] = X[k] + (1/eps*sigma(X[k])Y[k] + h(X[k]) - sigma_prime(X[k])sigma(X[k]))dt
-      Y[k+1] = Y[k] + (-1/eps^2*Y[k])dt + sqrt(2)/eps*dW
+      X[k+1] = X[k] + (1/ϵ*σ(X[k])Y[k] + h(X[k]) - σ_prime(X[k])σ(X[k]))dt
+      Y[k+1] = Y[k] + (-1/ϵ^2*Y[k])dt + sqrt(2)/ϵ*dW
     end
     
     (X, Y)
@@ -92,7 +121,7 @@ end
 ## Overdamped Langevin process with large-scale potential and fast oscillating part in 1D ##
 
 # general multiscale system for overdamped Langevin process with large-scale potential V and fast oscillating part p
-function Overdamped_LO_eps_1D(;x0, func_config, alpha, sigma, eps=0.1, T=100, dt=0.001)
+function Overdamped_LO_ϵ_1D(;x0, func_config, alpha, sigma, ϵ=0.1, T=100, dt=0.001)
   
   V_prime = func_config[2]
   p_prime = func_config[4]
@@ -102,12 +131,12 @@ function Overdamped_LO_eps_1D(;x0, func_config, alpha, sigma, eps=0.1, T=100, dt
   X = Array{Float64}(undef, 1, N+1)
   Y = Array{Float64}(undef, 1, N+1)
   X[1] = x0
-  Y[1] = x0/eps
+  Y[1] = x0/ϵ
   
   for k in 1:N
     dW = sqrt(dt)*randn(1)[1]
-    X[k+1] = X[k] + (-alpha*V_prime(X[k]) - 1/eps*p_prime(Y[k]))dt + sqrt(2sigma)dW
-    Y[k+1] = Y[k] + (-alpha/eps*V_prime(X[k]) - 1/eps^2*p_prime(Y[k]))dt + sqrt(2sigma)/eps*dW
+    X[k+1] = X[k] + (-alpha*V_prime(X[k]) - 1/ϵ*p_prime(Y[k]))dt + sqrt(2sigma)dW
+    Y[k+1] = Y[k] + (-alpha/ϵ*V_prime(X[k]) - 1/ϵ^2*p_prime(Y[k]))dt + sqrt(2sigma)/ϵ*dW
   end
   
   (X, Y)
@@ -167,7 +196,7 @@ end
 # x0 2-dimensional initial vector
 # Alpha symmetric positive definite matrix
 # p_prime holding two oscillations p1_prime and p2_prime
-function Overdamped_LO_eps_2D(;x0, y0, Alpha, p_prime, sigma, eps=0.1, T=100, dt=0.001)
+function Overdamped_LO_ϵ_2D(;x0, y0, Alpha, p_prime, sigma, ϵ=0.1, T=100, dt=0.001)
   N = convert(Int64, T/dt) - 1
 
   X = Array{Float64}(undef, 2, N+1)
@@ -179,10 +208,10 @@ function Overdamped_LO_eps_2D(;x0, y0, Alpha, p_prime, sigma, eps=0.1, T=100, dt
     dW1 = sqrt(dt)*randn(1)[1]
     dW2 = sqrt(dt)*randn(1)[1]
 
-    X[1,k+1] = X[1,k] - (Alpha[1,1]X[1,k] + Alpha[1,2]X[2,k] + 1/eps*p_prime[1](Y[1,k]))dt + sqrt(2sigma)dW1
-    X[2,k+1] = X[2,k] - (Alpha[2,1]X[1,k] + Alpha[2,2]X[2,k] + 1/eps*p_prime[2](Y[2,k]))dt + sqrt(2sigma)dW2
-    Y[1,k+1] = Y[1,k] - (Alpha[1,1]/eps*X[1,k] + Alpha[1,2]/eps*X[2,k] + 1/eps^2*p_prime[1](Y[1,k]))dt + sqrt(2sigma)/eps*dW1
-    Y[2,k+1] = Y[2,k] - (Alpha[2,1]/eps*X[1,k] + Alpha[2,2]/eps*X[2,k] + 1/eps^2*p_prime[2](Y[2,k]))dt + sqrt(2sigma)/eps*dW2
+    X[1,k+1] = X[1,k] - (Alpha[1,1]X[1,k] + Alpha[1,2]X[2,k] + 1/ϵ*p_prime[1](Y[1,k]))dt + sqrt(2sigma)dW1
+    X[2,k+1] = X[2,k] - (Alpha[2,1]X[1,k] + Alpha[2,2]X[2,k] + 1/ϵ*p_prime[2](Y[2,k]))dt + sqrt(2sigma)dW2
+    Y[1,k+1] = Y[1,k] - (Alpha[1,1]/ϵ*X[1,k] + Alpha[1,2]/ϵ*X[2,k] + 1/ϵ^2*p_prime[1](Y[1,k]))dt + sqrt(2sigma)/ϵ*dW1
+    Y[2,k+1] = Y[2,k] - (Alpha[2,1]/ϵ*X[1,k] + Alpha[2,2]/ϵ*X[2,k] + 1/ϵ^2*p_prime[2](Y[2,k]))dt + sqrt(2sigma)/ϵ*dW2
   end
   
   (X, Y)
@@ -217,7 +246,7 @@ end
 ## Truncated Burger's equation ##
 
 # general multiscale system for truncated Burger's equation
-function Truncated_B_eps(;x0, y0, z0, nu, q1, q2, eps=0.1, T=100, dt=0.001)
+function Truncated_B_ϵ(;x0, y0, z0, nu, q1, q2, ϵ=0.1, T=100, dt=0.001)
   
   N = convert(Int64, T/dt) - 1
 
@@ -232,9 +261,9 @@ function Truncated_B_eps(;x0, y0, z0, nu, q1, q2, eps=0.1, T=100, dt=0.001)
     dW1 = sqrt(dt)*randn(1)[1]
     dW2 = sqrt(dt)*randn(1)[1]
 
-    X[k+1] = X[k] + (nu*X[k] - 1/2eps*(X[k]Y[k] + Y[k]Z[k]))dt
-    Y[k+1] = Y[k] + (nu*Y[k] - 3/eps^2*Y[k] - 1/2eps*(2X[k]Z[k] - X[k]^2))dt + q1/eps*dW1
-    Z[k+1] = Z[k] + (nu*Z[k] - 8/eps^2*Z[k]  + 3/2eps*X[k]Y[k])dt + q2/eps*dW2
+    X[k+1] = X[k] + (nu*X[k] - 1/2ϵ*(X[k]Y[k] + Y[k]Z[k]))dt
+    Y[k+1] = Y[k] + (nu*Y[k] - 3/ϵ^2*Y[k] - 1/2ϵ*(2X[k]Z[k] - X[k]^2))dt + q1/ϵ*dW1
+    Z[k+1] = Z[k] + (nu*Z[k] - 8/ϵ^2*Z[k]  + 3/2ϵ*X[k]Y[k])dt + q2/ϵ*dW2
   end
   
   (X, Y, Z)
@@ -272,7 +301,7 @@ function Fast_chaotic_ode!(du, u, p, t)
 end
 
 # general multiscale system for fast chaotic noise solved with DifferentialEquations.jl using a fourth order Runge-Kutta scheme
-function Fast_chaotic_eps(;xy0, A, B, λ, ϵ=0.1, T=100, dt=0.001)
+function Fast_chaotic_ϵ(;xy0, A, B, λ, ϵ=0.1, T=100, dt=0.001)
   p = [A, B, λ, ϵ]
   tspan = (0.0, T)
 
@@ -321,12 +350,12 @@ function produce_fig_1D(trajectory, T)
   colsize!(process_fig.layout, 1, Aspect(1, 1.8))
   
 
-  X_eps_line = lines!(process_ax, T_range, trajectory[1][:], linewidth = 3.0, color = (:purple, 1.0))
-  Y_eps_line = lines!(process_ax, T_range, trajectory[2][:], linewidth = 3.0, color = (:grey, 0.4))
+  X_ϵ_line = lines!(process_ax, T_range, trajectory[1][:], linewidth = 3.0, color = (:purple, 1.0))
+  Y_ϵ_line = lines!(process_ax, T_range, trajectory[2][:], linewidth = 3.0, color = (:grey, 0.4))
   
   axislegend(process_ax,
-      [X_eps_line, Y_eps_line],
-      [L"Slow process $X_\epsilon$", L"Fast process $Y_\epsilon$"],
+      [X_ϵ_line, Y_ϵ_line],
+      [L"Slow process $X_ϵ$", L"Fast process $Y_ϵ$"],
       labelsize = 80
   )
 
@@ -346,12 +375,12 @@ function produce_fig_2D(trajectory)
   colsize!(process_fig.layout, 1, Aspect(1, 1.8))
   
 
-  X_eps_line = lines!(process_ax, trajectory[1][1,:], trajectory[1][2,:], linewidth = 3.0, color = (:purple, 1.0))
-  Y_eps_line = lines!(process_ax, trajectory[2][1,:], trajectory[2][2,:], linewidth = 3.0, color = (:grey, 0.4))
+  X_ϵ_line = lines!(process_ax, trajectory[1][1,:], trajectory[1][2,:], linewidth = 3.0, color = (:purple, 1.0))
+  Y_ϵ_line = lines!(process_ax, trajectory[2][1,:], trajectory[2][2,:], linewidth = 3.0, color = (:grey, 0.4))
   
   axislegend(process_ax,
-      [X_eps_line, Y_eps_line],
-      [L"Slow process $X_\epsilon$", L"Fast process $Y_\epsilon$"],
+      [X_ϵ_line, Y_ϵ_line],
+      [L"Slow process $X_ϵ$", L"Fast process $Y_ϵ$"],
       labelsize = 80
   )
 
@@ -365,7 +394,7 @@ T = 25.0
 A = 0.5
 sig = 1.0
 diff_func = LDA(A, sig)
-trajectory = Fast_OU_eps(x0=1.0, y0=1.0, func_config=diff_func, eps=0.1, T=T)
+trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
 #save("trajectory_fast_OU_process.pdf", fig)
@@ -377,7 +406,7 @@ B = 10.0
 sig_a = 1.0
 sig_b = 1.0
 diff_func = NLDAM(A, B, sig_a, sig_b)
-trajectory = Fast_OU_eps(x0=1.0, y0=1.0, func_config=diff_func, eps=0.1, T=T)
+trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
 
@@ -389,7 +418,7 @@ C = 5.0
 sig_a = 1.0
 sig_b = 1.0
 diff_func = NSDP(A, B, C, sig_a, sig_b)
-trajectory = Fast_OU_eps(x0=1.0, y0=1.0, func_config=diff_func, eps=0.1, T=T)
+trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
 
@@ -400,7 +429,7 @@ T = 25.0
 alpha = 0.5
 sigma = 2.0
 diff_func = LDO()
-trajectory = Overdamped_LO_eps_1D(x0=1.0, func_config=diff_func, alpha=alpha, sigma=sigma, eps=0.1, T=T)
+trajectory = Overdamped_LO_ϵ_1D(x0=1.0, func_config=diff_func, alpha=alpha, sigma=sigma, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
 #save("trajectory_Langevin_process.pdf", fig)
@@ -413,7 +442,7 @@ p1_prime, p2_prime = (x-> cos(x), x -> 1/2*cos(x))
 σ = 5  
 ϵ = 0.05
 dt = 1e-3
-trajectory = Overdamped_LO_eps_2D(x0=[-5.0, -5.0], y0=[-5.0/ϵ, -5.0/ϵ], Alpha=M, p_prime = (p1_prime, p2_prime), sigma=σ, eps=ϵ, T=T, dt=dt)
+trajectory = Overdamped_LO_ϵ_2D(x0=[-5.0, -5.0], y0=[-5.0/ϵ, -5.0/ϵ], Alpha=M, p_prime = (p1_prime, p2_prime), sigma=σ, ϵ=ϵ, T=T, dt=dt)
 
 fig = produce_fig_2D(trajectory)
 #save("trajectory_Langevin_process_2D.pdf", fig)
