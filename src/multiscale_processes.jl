@@ -20,21 +20,21 @@ using LaTeXStrings
 
 ## Fast Ornstein-Uhlenbeck ##
 
-# general multiscale system for fast Ornstein-Uhlenbeck process
-# @doc raw""" """ is a combo to avoid escaping latex commands like as \\ϵilon
+# general mutliscale system for fast Ornstein-Uhlenbeck process
+# @doc raw""" """ is a combo to avoid escaping latex commands as \\epsilon
 @doc raw"""
     Fast_OU_ϵ(x0, y0; <keyword arguments>)
 
 Return a two-dimensional fast-slow Ornstein-Uhlenbeck process starting at `(x0, y0)` as a discretized time series.
 
-The corresponding stochastic differential equation is
+The corresponding stochastic differential equation is for ``t \in [0,T]``
 ```math
 \begin{aligned}
   dX_ϵ(t) &= \left( \frac{1}{ϵ} σ(X_ϵ(t)) Y_ϵ(t) + h(X_ϵ(t), Y_ϵ(t)) - σ'(X_ϵ(t))σ(X_ϵ(t)) \right) dt, \quad &X_ϵ(0) = x_0, \\
-  dY_ϵ(t) &= -\frac{1}{ϵ^2} Y_ϵ(t) + \frac{\sqrt{2}}{ϵ} dV_t, \quad &Y_ϵ(0) = y_0.
+  dY_ϵ(t) &= -\frac{1}{ϵ^2} Y_ϵ(t) + \frac{\sqrt{2}}{ϵ} dV(t), \quad &Y_ϵ(0) = y_0.
 \end{aligned}
 ```
-Here is ``σ'`` the first derivative of ``σ``. A simple Euler-Maruyama discretization is implemented for the generation of the time series.
+Here, ``σ'`` is the first derivative of ``σ``. A simple Euler-Maruyama discretization is implemented for the generation of the time series.
 
 ---
 # Arguments
@@ -43,7 +43,7 @@ Here is ``σ'`` the first derivative of ``σ``. A simple Euler-Maruyama discreti
 - `func_config`:      collection of the functions ``h, σ`` and ``σ'`` as a tuple.
 - `ϵ::Real=0.1`:      small scale parameter ``ϵ``.
 - `T::Real=100`:      time horizon of time series.
-- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyma scheme.
+- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
 
 ---
 # Examples
@@ -53,6 +53,9 @@ julia> σ = x -> sqrt(2)
 julia> σ_prime = x -> 0
 julia> Fast_OU_ϵ(1.0, 1.0, func_config=(h, σ, σ_prime))
 ```
+
+---
+See also [`Fast_OU_∞`](@ref), [`LDA`](@ref), [`NLDAM`](@ref), [`NSDP`](@ref).
 """
 function Fast_OU_ϵ(x0, y0; func_config, ϵ=0.1, T=100, dt=1e-3)
     h = func_config[1]
@@ -76,8 +79,42 @@ function Fast_OU_ϵ(x0, y0; func_config, ϵ=0.1, T=100, dt=1e-3)
 end
 
 # general limit process for fast Ornstein-Uhlenbeck process
-function Fast_OU_limit(;X0, h, sigma, T=100, dt=0.001)
-  
+@doc raw"""
+    Fast_OU_∞(X0; <keyword arguments>)
+
+Return a one-dimensional limit process, homogenized from the fast-slow Ornstein-Uhlenbeck process, starting at `X0` as a discretized time series.
+
+The corresponding stochastic differential equation is for ``t \in [0,T]``
+```math
+\begin{aligned}
+  dX(t) = \bar{h}(X(t)) dt - \sqrt{2 σ(X(t))^2} dW(t), \quad X(0) = X_0.
+\end{aligned}
+```
+Here, ``\bar{h}`` is the average of ``h`` with respect to the invariant measure of the fast process ``Y_ϵ`` coming from [`Fast_OU_ϵ`](@ref). 
+A simple Euler-Maruyama discretization is implemented for the generation of the time series.
+
+---
+# Arguments
+- `X0::Real`:         initial point ``X_0`` of limit process ``X``.
+- `func_config`:      collection of the functions ``\bar{h}`` and ``σ`` as a tuple.
+- `T::Real=100`:      time horizon of time series.
+- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
+
+---
+# Examples
+```julia-repl
+julia> h_aver = x -> -x   # corresponds to an ordinary Ornstein-Uhlenbeck process
+julia> σ = x -> sqrt(2)
+julia> Fast_OU_∞(1.0, func_config=(h_aver, σ))
+```
+
+---
+See also [`Fast_OU_ϵ`](@ref), [`LDA`](@ref), [`NLDAM`](@ref), [`NSDP`](@ref).
+"""
+function Fast_OU_∞(X0; func_config, T=100, dt=1e-3)
+  h_aver = func_config[1]
+  σ = func_config[2]
+
   N = convert(Int64, T/dt) - 1
 
   X = Array{Float64}(undef, 1, N+1)
@@ -85,43 +122,145 @@ function Fast_OU_limit(;X0, h, sigma, T=100, dt=0.001)
   
   for k in 1:N
     dW = sqrt(dt)*randn(1)[1]
-    X[k+1] = X[k] + h(X[k])dt + sqrt(2sigma(X[k])^2)dW
+    X[k+1] = X[k] + h_aver(X[k])dt + sqrt(σ(X[k])^2)dW
   end
   
   X
 end
 
 # linear drift with additive noise
-function LDA(A, sig)
-  h = x -> -A*x
-  sigma = x -> sqrt(sig)
-  sigma_prime = x -> 0
+@doc raw"""
+    LDA(A, σ)
 
-  (h, sigma, sigma_prime)
+Return a tuple of functions used for the definition of [`Fast_OU_ϵ`](@ref).
+
+The returned functions are
+```math
+\begin{aligned}
+  h(x) &= -Ax, \quad &A > 0, \\
+  σ(x) &= \sqrt{σ}, \quad &σ>0, \\
+  σ'(x) &= 0.
+\end{aligned}
+```
+They yield a linear drift with additive noise.
+
+---
+# Arguments
+- `A::Real=1`:        non-negative real number.
+- `σ::Real=1`:        positive real number.
+
+---
+See also [`Fast_OU_ϵ`](@ref).
+"""
+function LDA(A=1, σ=1)
+  h = x -> -A*x
+  σ = x -> sqrt(σ)
+  σ_prime = x -> 0
+
+  (h, σ, σ_prime)
 end
 
 # nonlinear drift with additive and multiplicative noise
-function NLDAM(A, B, sig_a, sig_b)
-  h = x -> A*x - B*x^3
-  sigma = x -> sqrt(sig_a + sig_b*x^2)
-  sigma_prime = x -> sig_b*x/sqrt(sig_a + sig_b*x^2)
+@doc raw"""
+    NLDAM(A, B, σ_a, σ_b)
 
-  (h, sigma, sigma_prime)
+Return a tuple of functions used for the definition of [`Fast_OU_ϵ`](@ref).
+
+The returned functions are
+```math
+\begin{aligned}
+  h(x) &= Ax - Bx^3, \quad &A, B > 0, \\
+  σ(x) &= \sqrt{σ_a + σ_b x^2}, \quad &σ_a, σ_b > 0, \\
+  σ'(x) &= \frac{σ_b x}{\sqrt{σ_a + σ_b x^2}}.
+\end{aligned}
+```
+They yield a nonlinear drift with additive and multiplicative noise.
+
+---
+# Arguments
+- `A::Real=1`:          non-negative real number.
+- `B::Real=1`:          non-negative real number.
+- `σ_a::Real=1`:        positive real number.
+- `σ_b::Real=1`:        positive real number.
+
+---
+See also [`Fast_OU_ϵ`](@ref).
+"""
+function NLDAM(A=1, B=1, σ_a=1, σ_b=1)
+  h = x -> A*x - B*x^3
+  σ = x -> sqrt(σ_a + σ_b*x^2)
+  σ_prime = x -> σ_b*x/sqrt(σ_a + σ_b*x^2)
+
+  (h, σ, σ_prime)
 end
   
 # nonlinear drift with additive and multiplicative noise, non-symmetric double-well potential
-function NSDP(A, B, C, sig_a, sig_b)
+@doc raw"""
+    NSDP(A, B, C, σ_a, σ_b)
+
+Return a tuple of functions used for the definition of [`Fast_OU_ϵ`](@ref).
+
+The returned functions are
+```math
+\begin{aligned}
+  h(x) &= Ax + Bx^2 - Cx^3, \quad &A, B, C > 0, \\
+  σ(x) &= \sqrt{σ_a + σ_b x^2}, \quad &σ_a, σ_b > 0, \\
+  σ'(x) &= \frac{σ_b x}{\sqrt{σ_a + σ_b x^2}}.
+\end{aligned}
+```
+They yield a nonlinear, non-symmetric double-well potential drift with additive and multiplicative noise.
+
+---
+# Arguments
+- `A::Real=1`:          non-negative real number.
+- `B::Real=1`:          non-negative real number.
+- `C::Real=1`:          non-negative real number.
+- `σ_a::Real=1`:        positive real number.
+- `σ_b::Real=1`:        positive real number.
+
+---
+See also [`Fast_OU_ϵ`](@ref).
+"""
+function NSDP(A=1, B=1, C=1, σ_a=1, σ_b=1)
   h = x -> A*x + B*x^2 - C*x^3
-  sigma = x -> sqrt(sig_a + sig_b*x^2)
-  sigma_prime = x -> sig_b*x/sqrt(sig_a + sig_b*x^2)
+  sigma = x -> sqrt(σ_a + σ_b*x^2)
+  sigma_prime = x -> σ_b*x/sqrt(σ_a + σ_b*x^2)
 
   (h, sigma, sigma_prime)
 end
 
-## Overdamped Langevin process with large-scale potential and fast oscillating part in 1D ##
+## Overdamped Langevin process with large-scale potential and fast oscillating part ##
 
 # general multiscale system for overdamped Langevin process with large-scale potential V and fast oscillating part p
-function Overdamped_LO_ϵ_1D(;x0, func_config, alpha, sigma, ϵ=0.1, T=100, dt=0.001)
+@doc raw"""
+    Overdamped_LO_ϵ(x0; <keyword arguments>)
+
+Return a two-dimensional overdamped Langevin process with a large-scale potential and a fast oscillating part starting at `(x0, y0/ϵ)` as a discretized time series.
+
+The corresponding stochastic differential equation is for ``t \in [0,T]``
+```math
+\begin{aligned}
+  dX_ϵ(t) = -α V'(X_ϵ(t)) - \frac{1}{ϵ} p'\left( \frac{X_ϵ(t)}{ϵ} \right) dt  + \sqrt{2 σ} dW(t), \quad &X_ϵ(0) = x_0, \\
+  dY_ϵ(t) = -\frac{α}{ϵ} V'(X_ϵ(t)) - \frac{1}{ϵ^2} p'\left( Y_ϵ(t) \right) dt  + \sqrt{\frac{2 σ}{ϵ^2}} dW(t), \quad &Y_ϵ(0) = y_0.
+\end{aligned}
+```
+Here, ``V`` is a large-scale potential and ``p`` a ``2π``-periodic function, see [`LDO`](@ref) or [`NLDO`](@ref). Note that ``Y_ϵ = X_ϵ/ϵ``. 
+A simple Euler-Maruyama discretization is implemented for the generation of the time series.
+
+---
+# Arguments
+- `x0::Real`:         initial point ``x_0`` of slow process ``X_ϵ``.
+- `func_config`:      collection of the functions ``V, V', p`` and ``p'`` as a tuple.
+- `α::Real`:          non-negative drift parameter ``α``.
+- `σ::Real`:          positive diffusion parameter ``σ``.
+- `ϵ::Real=0.1`:      small scale parameter ``ϵ``.
+- `T::Real=100`:      time horizon of time series.
+- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
+
+---
+See also [`Overdamped_LO_∞`](@ref), [`LDO`](@ref), [`NLDO`](@ref).
+"""
+function Overdamped_LO_ϵ(x0; func_config, α, σ, ϵ=0.1, T=100, dt=1e-3)
   
   V_prime = func_config[2]
   p_prime = func_config[4]
@@ -135,8 +274,8 @@ function Overdamped_LO_ϵ_1D(;x0, func_config, alpha, sigma, ϵ=0.1, T=100, dt=0
   
   for k in 1:N
     dW = sqrt(dt)*randn(1)[1]
-    X[k+1] = X[k] + (-alpha*V_prime(X[k]) - 1/ϵ*p_prime(Y[k]))dt + sqrt(2sigma)dW
-    Y[k+1] = Y[k] + (-alpha/ϵ*V_prime(X[k]) - 1/ϵ^2*p_prime(Y[k]))dt + sqrt(2sigma)/ϵ*dW
+    X[k+1] = X[k] + (-α*V_prime(X[k]) - 1/ϵ*p_prime(Y[k]))dt + sqrt(2σ)dW
+    Y[k+1] = Y[k] + (-α/ϵ*V_prime(X[k]) - 1/ϵ^2*p_prime(Y[k]))dt + sqrt(2σ)/ϵ*dW
   end
   
   (X, Y)
@@ -145,6 +284,19 @@ end
 # general limit process for overdamped Langevin process with large-scale potential V and fast oscillating part p
 
 # corrective constant in effective limit equation where period L=2pi
+@doc raw"""
+    K(p, σ)
+
+Return corrective constant of the cell problem of the homogenization in the overdamped Langevin case.
+
+---
+# Arguments
+- `p`:                ``2π``-periodic function.
+- `σ`:                positive diffusion parameter of slow process ``X_ϵ``.
+
+---
+See also [`Overdamped_LO_∞`](@ref).
+"""
 function K(p, sigma)
   Z1 = HCubature.hquadrature(x -> exp(p(x)/sigma), 0, 2pi)[1]
   Z2 = HCubature.hquadrature(x -> exp(-p(x)/sigma), 0, 2pi)[1]
@@ -152,10 +304,40 @@ function K(p, sigma)
   (2pi)^2/(Z1*Z2)
 end
 
-function Overdamped_LO_limit_1D(;X0, V_prime, p, alpha, sigma, T=100, dt=0.001)
+@doc raw"""
+    Overdamped_LO_∞(X0; <keyword arguments>)
 
-  A = alpha*K(p, sigma)
-  Sigma = sigma*K(p, sigma)
+Return a one-dimensional overdamped limit Langevin process, homogenized from the multiscale overdamped Langevin process,  starting at `X0` as a discretized time series.
+
+The corresponding stochastic differential equation is for ``t \in [0,T]``
+```math
+\begin{aligned}
+  dX(t) = -α K V'(X(t)) dt  + \sqrt{2 σ K} dW(t), \quad &X(0) = X_0.
+\end{aligned}
+```
+Here, ``K`` is a corrective constant that comes from the cell problem of the homogenization, see also [`K`](@ref), and is computed inside the function.
+A simple Euler-Maruyama discretization is implemented for the generation of the time series.
+
+---
+# Arguments
+- `X0::Real`:         initial point ``X_0`` of slow process ``X_ϵ``.
+- `func_config`:      collection of the functions ``V, V', p`` and ``p'`` as a tuple.
+- `α::Real`:          non-negative drift parameter ``α``.
+- `σ::Real`:          positive diffusion parameter ``σ``.
+- `ϵ::Real=0.1`:      small scale parameter ``ϵ``.
+- `T::Real=100`:      time horizon of time series.
+- `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
+
+---
+See also [`Overdamped_LO_ϵ`](@ref), [`LDO`](@ref), [`NLDO`](@ref).
+"""
+function Overdamped_LO_∞(X0; func_config, α, σ, T=100, dt=0.001)
+  
+  V_prime = func_config[2]
+  p = func_config[3]
+
+  A = α*K(p, σ)
+  Σ = σ*K(p, σ)
 
   N = convert(Int64, T/dt) - 1
 
@@ -164,13 +346,32 @@ function Overdamped_LO_limit_1D(;X0, V_prime, p, alpha, sigma, T=100, dt=0.001)
   
   for k in 1:N
     dW = sqrt(dt)*randn(1)[1]
-    X[k+1] = X[k] - A*V_prime(X[k])dt + sqrt(2Sigma)dW
+    X[k+1] = X[k] - A*V_prime(X[k])dt + sqrt(2Σ)dW
   end
   
   X
 end
 
 # quadratic potential V with sine oscillation p
+@doc raw"""
+    LDO()
+
+Return a tuple of functions used for the definition of [`Overdamped_LO_ϵ`](@ref) and [`Overdamped_LO_∞`](@ref).
+
+The returned functions are
+```math
+\begin{aligned}
+  V(x) &= \frac12 x^2, \\
+  V'(x) &= x, \\
+  p(x) &= sin(x), \\
+  p'(x) &= cos(x).
+\end{aligned}
+```
+They yield a quadratic potential drift with a sine oscillation.
+
+---
+See also [`Overdamped_LO_ϵ`](@ref), [`Overdamped_LO_∞`](@ref).
+"""
 function LDO()
   V = x -> x^2/2
   V_prime = x -> x
@@ -181,6 +382,25 @@ function LDO()
 end
 
 # bistable potential V with sine oscillation p
+@doc raw"""
+    NLDO()
+
+Return a tuple of functions used for the definition of [`Overdamped_LO_ϵ`](@ref) and [`Overdamped_LO_∞`](@ref).
+
+The returned functions are
+```math
+\begin{aligned}
+  V(x) &= \frac14 x^4 - \frac12 x^2, \\
+  V'(x) &= x^3 - x, \\
+  p(x) &= sin(x), \\
+  p'(x) &= cos(x).
+\end{aligned}
+```
+They yield a bistable potential drift with a sine oscillation.
+
+---
+See also [`Overdamped_LO_ϵ`](@ref), [`Overdamped_LO_∞`](@ref).
+"""
 function NLDO()
   V = x -> -x^2/2 + x^4/4
   V_prime = x -> -x + x^3
@@ -403,9 +623,9 @@ fig = produce_fig_1D(trajectory, T)
 T = 25.0
 A = 2.0
 B = 10.0
-sig_a = 1.0
-sig_b = 1.0
-diff_func = NLDAM(A, B, sig_a, sig_b)
+σ_a = 1.0
+σ_b = 1.0
+diff_func = NLDAM(A, B, σ_a, σ_b)
 trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
@@ -415,9 +635,9 @@ T = 25.0
 A = 1.0
 B = 2.0
 C = 5.0
-sig_a = 1.0
-sig_b = 1.0
-diff_func = NSDP(A, B, C, sig_a, sig_b)
+σ_a = 1.0
+σ_b = 1.0
+diff_func = NSDP(A, B, C, σ_a, σ_b)
 trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
 
 fig = produce_fig_1D(trajectory, T)
