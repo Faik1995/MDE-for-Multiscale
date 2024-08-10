@@ -6,9 +6,15 @@ Fast_OU_∞
 LDA
 NLDAM
 NSDP
-Overdamped_LO_ϵ
+Langevin_ϵ
 K
-Overdamped_LO_∞
+Langevin_∞
 LDO
 NLDO
+Langevin_ϵ_2D
+Langevin_∞_2D
+Burger_ϵ
+Burger_∞
+Fast_chaotic_ϵ
+Fast_chaotic_∞
 ```

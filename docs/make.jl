@@ -4,6 +4,7 @@ makedocs(
     sitename = "MDE for Multiscale Documentation",
     authors = "Jaroslav Borodavka",
     pages = [
-        "Home" => "index.md",
+        "Multiscale System and Homogenized Limit Pairs" => "index.md",
+
     ],
 )
