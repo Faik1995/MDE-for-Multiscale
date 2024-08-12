@@ -17,4 +17,6 @@ Burger_ϵ
 Burger_∞
 Fast_chaotic_ϵ
 Fast_chaotic_∞
+produce_trajectory_1D
+produce_trajectory_2D
 ```

@@ -25,7 +25,7 @@ using LaTeXStrings
 @doc raw"""
     Fast_OU_ϵ(x0, y0; <keyword arguments>)
 
-Return a two-dimensional fast-slow Ornstein-Uhlenbeck process starting at `(x0, y0)` as a discretized time series.
+Return a 2-dimensional fast-slow Ornstein-Uhlenbeck process starting at `(x0, y0)` as a discretized time series.
 
 The corresponding stochastic differential equation is defined for ``t \in [0,T]`` as
 ```math
@@ -47,11 +47,24 @@ Here, ``σ'`` is the first derivative of ``σ``. A simple Euler-Maruyama discret
 
 ---
 # Examples
-```julia-repl
-julia> h = x -> -x
-julia> σ = x -> sqrt(2)
-julia> σ_prime = x -> 0
-julia> Fast_OU_ϵ(1.0, 1.0, func_config=(h, σ, σ_prime))
+```julia
+using MDE_project # in order to use the produce_trajectory_1D function
+
+# linear drift with additive noise
+T = 10.0
+trajectory = Fast_OU_ϵ(1.0, 1.0, func_config=LDA(), ϵ=0.1, T=T)
+fig = produce_trajectory_1D(trajectory, T)
+#save("trajectory_fast_OU_process.pdf", fig)
+
+# nonlinear drift with additive and multiplicative noise
+T = 10.0
+trajectory = Fast_OU_ϵ(1.0, 1.0, func_config=NLDAM(), ϵ=0.1, T=T)
+fig = produce_trajectory_1D(trajectory, T)
+
+# nonlinear drift with additive and multiplicative noise, non-symmetric double-well potential
+T = 10.0
+trajectory = Fast_OU_ϵ(1.0, 1.0, func_config=NSDP(), ϵ=0.1, T=T)
+fig = produce_trajectory_1D(trajectory, T)
 ```
 
 ---
@@ -153,11 +166,7 @@ They yield a linear drift with additive noise.
 See also [`Fast_OU_ϵ`](@ref).
 """
 function LDA(A=1, σ=1)
-  h = x -> -A*x
-  σ = x -> sqrt(σ)
-  σ_prime = x -> 0
-
-  (h, σ, σ_prime)
+  (x -> -A*x, x -> sqrt(σ), x -> 0)
 end
 
 # nonlinear drift with additive and multiplicative noise
@@ -178,15 +187,15 @@ They yield a nonlinear drift with additive and multiplicative noise.
 
 ---
 # Arguments
-- `A::Real=1`:          non-negative real number.
-- `B::Real=1`:          non-negative real number.
+- `A::Real=2`:          non-negative real number.
+- `B::Real=10`:         non-negative real number.
 - `σ_a::Real=1`:        positive real number.
 - `σ_b::Real=1`:        positive real number.
 
 ---
 See also [`Fast_OU_ϵ`](@ref).
 """
-function NLDAM(A=1, B=1, σ_a=1, σ_b=1)
+function NLDAM(A=2, B=10, σ_a=1, σ_b=1)
   h = x -> A*x - B*x^3
   σ = x -> sqrt(σ_a + σ_b*x^2)
   σ_prime = x -> σ_b*x/sqrt(σ_a + σ_b*x^2)
@@ -213,15 +222,15 @@ They yield a nonlinear, non-symmetric double-well potential drift with additive 
 ---
 # Arguments
 - `A::Real=1`:          non-negative real number.
-- `B::Real=1`:          non-negative real number.
-- `C::Real=1`:          non-negative real number.
+- `B::Real=2`:          non-negative real number.
+- `C::Real=5`:          non-negative real number.
 - `σ_a::Real=1`:        positive real number.
 - `σ_b::Real=1`:        positive real number.
 
 ---
 See also [`Fast_OU_ϵ`](@ref).
 """
-function NSDP(A=1, B=1, C=1, σ_a=1, σ_b=1)
+function NSDP(A=1, B=2, C=5, σ_a=1, σ_b=1)
   h = x -> A*x + B*x^2 - C*x^3
   sigma = x -> sqrt(σ_a + σ_b*x^2)
   sigma_prime = x -> σ_b*x/sqrt(σ_a + σ_b*x^2)
@@ -235,7 +244,7 @@ end
 @doc raw"""
     Langevin_ϵ(x0; <keyword arguments>)
 
-Return a two-dimensional overdamped Langevin process with a large-scale potential and a fast oscillating part starting at `(x0, y0/ϵ)` as a discretized time series.
+Return a 2-dimensional overdamped Langevin process with a large-scale potential and a fast oscillating part starting at `(x0, y0/ϵ)` as a discretized time series.
 
 The corresponding stochastic differential equation is defined for ``t \in [0,T]`` as
 ```math
@@ -256,6 +265,18 @@ A simple Euler-Maruyama discretization is implemented for the generation of the 
 - `ϵ::Real=0.1`:      positive small scale parameter ``ϵ``.
 - `T::Real=100`:      time horizon of time series.
 - `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
+
+---
+# Examples
+```julia
+using MDE_project # in order to use the produce_trajectory_1D function
+
+# quadratic potential V with sine oscillation p
+T = 10.0
+trajectory = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=T)
+fig = produce_trajectory_1D(trajectory, T)
+#save("trajectory_Langevin_process.pdf", fig)
+```
 
 ---
 See also [`Langevin_∞`](@ref), [`LDO`](@ref), [`NLDO`](@ref).
@@ -398,6 +419,42 @@ The returned functions are
 They yield a bistable potential drift with a sine oscillation.
 
 ---
+# Examples
+```julia
+using MDE_project
+
+# a slightly different potential (for illustrative reasons)
+ϵ = 0.1
+V(x) = -x^2 + x^4/12
+p(x) = sin(x/ϵ)
+x_range = range(-4,4,2000)
+
+# create and adjust figure components; using CairoMakie.jl here
+drift_fig = Figure(size=(3840,2160), fontsize = 50)
+drift_ax = Axis(drift_fig[1, 1],
+  # x-axis
+  xlabel = L"x",
+  xticks = LinearTicks(5),
+  # y-axis
+  yticks = LinearTicks(5),
+)
+Makie.xlims!(drift_ax, x_range[1], x_range[end])
+colsize!(drift_fig.layout, 1, Aspect(1, 1.8))
+  
+
+V_line = lines!(drift_ax, x_range, map(V, x_range), linewidth = 10.0, color = (:darkgrey, 1.0), linestyle = :dash)
+Vp_line = lines!(drift_ax, x_range, map(x->V(x)+p(x), x_range), linewidth = 3.0, color = (:black, 1.0))
+
+axislegend(drift_ax,
+[V_line, Vp_line],
+[L"$x^4/12-x^2$", L"$x^4/12 - x^2 + \sin(x/%$ϵ)$"],
+labelsize = 80
+)
+
+drift_fig
+```
+
+---
 See also [`Langevin_ϵ`](@ref), [`Langevin_∞`](@ref).
 """
 function NLDO()
@@ -415,7 +472,7 @@ end
 @doc raw"""
     Langevin_ϵ_2D(x0; <keyword arguments>)
 
-Return a four-dimensional overdamped Langevin process with a quadratic potential and a fast separable oscillating part starting at `(x0, y0/ϵ)` as a discretized time series.
+Return a 4-dimensional overdamped Langevin process with a quadratic potential and a fast separable oscillating part starting at `(x0, y0/ϵ)` as a discretized time series.
 
 The corresponding stochastic differential equation is defined for ``t \in [0,T]`` as
 ```math
@@ -446,6 +503,17 @@ A simple Euler-Maruyama discretization is implemented for the generation of the 
 - `dt:Real=1e-3`:     time discretization step used in the Euler-Maruyama scheme.
 
 ---
+# Examples
+```julia
+using MDE_project # in order to use the produce_trajectory_1D function
+
+# quadratic potential V and fast separable oscillating part in 2D
+trajectory = Langevin_ϵ_2D([-5.0, -5.0], func_config=(x-> cos(x), x -> 1/2*cos(x)), M=[4 2;2 3], σ=5.0, ϵ=0.05, T=10.0)
+fig = produce_trajectory_2D(trajectory)
+#save("trajectory_Langevin_process_2D.pdf", fig)
+```
+
+---
 See also [`Langevin_∞_2D`](@ref).
 """
 function Langevin_ϵ_2D(x0; func_config, M, σ, ϵ=0.1, T=100, dt=1e-3)
@@ -473,7 +541,7 @@ end
 @doc raw"""
     Langevin_∞_2D(X0; <keyword arguments>)
 
-Return a two-dimensional overdamped limit Langevin process, homogenized from the multiscale overdamped Langevin process figuring in [`Langevin_ϵ_2D`](@ref),  starting at `X0` as a discretized time series.
+Return a 2-dimensional overdamped limit Langevin process, homogenized from the multiscale overdamped Langevin process figuring in [`Langevin_ϵ_2D`](@ref),  starting at `X0` as a discretized time series.
 
 The corresponding stochastic differential equation is defined for ``t \in [0,T]`` as
 ```math
@@ -632,7 +700,7 @@ end
 @doc raw"""
     Fast_chaotic_ϵ(xy0; <keyword arguments>)
 
-Return the four-dimensional solution path of a fast chaotic noise system starting at `xy0` as a discretized time series.
+Return the 4-dimensional solution path of a fast chaotic noise system starting at `xy0` as a discretized time series.
 
 The corresponding ordinary differential equation is defined for ``t \in [0,T]`` as
 ```math
@@ -725,10 +793,32 @@ function Fast_chaotic_∞(X0; A, B, σ, T=100, dt=1e-3)
   X
 end
 
-#=
-## various plots and figures ##
+## functions for generating a trajectory plot ##
+@doc raw"""
+    produce_trajectory_1D(trajectory, T)
 
-function produce_fig_1D(trajectory, T)
+Generate a plot of a 2-dimensional (slow + fast dimension) multiscale time series of length `T` using the [CairoMakie.jl](https://github.com/MakieOrg/Makie.jl/tree/master/CairoMakie) package.
+
+---
+# Arguments
+- `trajectory`:   2-dimensional time series of length `T`
+- `T::Real`:      time horizon of time series.
+
+---
+# Examples
+```julia
+using MDE_project # in order to use the Langevin_ϵ function
+
+# quadratic potential V with sine oscillation p
+T = 10.0
+trajectory = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=T)
+fig = produce_trajectory_1D(trajectory, T)
+```
+
+---
+See also [`produce_trajectory_2D`](@ref).
+"""
+function produce_trajectory_1D(trajectory, T)
 
   N = length(trajectory[1])
   T_range = range(0, T, N)
@@ -758,7 +848,29 @@ function produce_fig_1D(trajectory, T)
   process_fig
 end
 
-function produce_fig_2D(trajectory)
+@doc raw"""
+    produce_trajectory_2D(trajectory)
+
+Generate a plot of a 4-dimensional (slow + fast dimension) multiscale time series using the [CairoMakie.jl](https://github.com/MakieOrg/Makie.jl/tree/master/CairoMakie) package.
+
+---
+# Arguments
+- `trajectory`:   4-dimensional time series
+
+---
+# Examples
+```julia
+using MDE_project # in order to use the Langevin_ϵ_2D function
+
+# quadratic potential V and fast separable oscillating part in 2D
+trajectory = Langevin_ϵ_2D([-5.0, -5.0], func_config=(x-> cos(x), x -> 1/2*cos(x)), M=[4 2;2 3], σ=5.0, ϵ=0.05, T=10.0)
+fig = produce_trajectory_2D(trajectory)
+```
+
+---
+See also [`produce_trajectory_1D`](@ref).
+"""
+function produce_trajectory_2D(trajectory)
 
   # create and adjust figure components
   process_fig = Figure(size=(3840,2160), fontsize = 50)
@@ -782,93 +894,3 @@ function produce_fig_2D(trajectory)
 
   process_fig
 end
-
-## Fast Ornstein-Uhlenbeck ##
-
-# linear drift with additive noise
-T = 25.0
-A = 0.5
-sig = 1.0
-diff_func = LDA(A, sig)
-trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
-
-fig = produce_fig_1D(trajectory, T)
-#save("trajectory_fast_OU_process.pdf", fig)
-
-# nonlinear drift with additive and multiplicative noise
-T = 25.0
-A = 2.0
-B = 10.0
-σ_a = 1.0
-σ_b = 1.0
-diff_func = NLDAM(A, B, σ_a, σ_b)
-trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
-
-fig = produce_fig_1D(trajectory, T)
-
-# nonlinear drift with additive and multiplicative noise, non-symmetric double-well potential
-T = 25.0
-A = 1.0
-B = 2.0
-C = 5.0
-σ_a = 1.0
-σ_b = 1.0
-diff_func = NSDP(A, B, C, σ_a, σ_b)
-trajectory = Fast_OU_ϵ(x0=1.0, y0=1.0, func_config=diff_func, ϵ=0.1, T=T)
-
-fig = produce_fig_1D(trajectory, T)
-
-## Overdamped Langevin process with large-scale potential and fast oscillating part in 1D ##
-
-# quadratic potential V with sine oscillation p
-T = 25.0
-alpha = 0.5
-sigma = 2.0
-diff_func = LDO()
-trajectory = Langevin_ϵ_1D(x0=1.0, func_config=diff_func, alpha=alpha, sigma=sigma, ϵ=0.1, T=T)
-
-fig = produce_fig_1D(trajectory, T)
-#save("trajectory_Langevin_process.pdf", fig)
-
-
-## Overdamped Langevin process with quadratic potential and fast separable oscillating part in 2D ##
-T = 10.0
-M = [4 2;2 3]
-p1_prime, p2_prime = (x-> cos(x), x -> 1/2*cos(x))
-σ = 5  
-ϵ = 0.05
-dt = 1e-3
-trajectory = Langevin_ϵ_2D(x0=[-5.0, -5.0], y0=[-5.0/ϵ, -5.0/ϵ], M=M, p_prime = (p1_prime, p2_prime), sigma=σ, ϵ=ϵ, T=T, dt=dt)
-
-fig = produce_fig_2D(trajectory)
-#save("trajectory_Langevin_process_2D.pdf", fig)
-
-V(x) = -x^2 + x^4/12
-p(x) = sin(x/ϵ)
-x_range = range(-4,4,2000)
-
-# create and adjust figure components
-drift_fig = Figure(size=(3840,2160), fontsize = 50)
-drift_ax = Axis(drift_fig[1, 1],
-  # x-axis
-  xlabel = L"x",
-  xticks = LinearTicks(5),
-  # y-axis
-  yticks = LinearTicks(5),
-)
-Makie.xlims!(drift_ax, x_range[1], x_range[end])
-colsize!(drift_fig.layout, 1, Aspect(1, 1.8))
-  
-
-V_line = lines!(drift_ax, x_range, map(V, x_range), linewidth = 10.0, color = (:darkgrey, 1.0), linestyle = :dash)
-Vp_line = lines!(drift_ax, x_range, map(x->V(x)+p(x), x_range), linewidth = 3.0, color = (:black, 1.0))
-
-axislegend(drift_ax,
-[V_line, Vp_line],
-[L"$x^4/12-x^2$", L"$x^4/12 - x^2 + \sin(x/0.05)$"],
-labelsize = 80
-)
-
-drift_fig
-save("Langevin_potentials.pdf", drift_fig)
-=#
