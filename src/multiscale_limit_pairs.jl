@@ -1,12 +1,12 @@
 ########################################################################################################
 ########################################################################################################
-# Simulation of different multiscale SDE systems and their respective SDE limit obtained through
+# Simulation of different multiscale SDE systems and their respective SDE limits obtained through
 # homogenization theory. Considered classes of processes involve fast Ornstein-Uhlenbeck, overdamped
-# Langevin with a large-scale potential and fast oscillating part in 1D and 2D, Truncated Burger's
-# equation.
+# Langevin equation with a large-scale potential and fast oscillating part in 1D and 2D, truncated 
+# Burger's equation and a deterministic fast chaotic noise system.
 ########################################################################################################
 ########################################################################################################
-# Jaroslav Borodavka, 15.04.2024
+# Jaroslav Borodavka, 08.08.2024
 
 # required packages
 using CairoMakie
@@ -15,7 +15,7 @@ using HCubature
 using LaTeXStrings
 
 ########################################################################################################
-## functions for the realization of multiscale and effective processes, different examples
+## functions for the realization of multiscale and limit processes, different examples
 ########################################################################################################
 
 ## Fast Ornstein-Uhlenbeck ##
@@ -48,8 +48,6 @@ Here, ``σ'`` is the first derivative of ``σ``. A simple Euler-Maruyama discret
 ---
 # Examples
 ```julia
-using MDE_project # in order to use the produce_trajectory_1D function
-
 # linear drift with additive noise
 T = 10.0
 trajectory = Fast_OU_ϵ(1.0, 1.0, func_config=LDA(), ϵ=0.1, T=T)
@@ -269,8 +267,6 @@ A simple Euler-Maruyama discretization is implemented for the generation of the 
 ---
 # Examples
 ```julia
-using MDE_project # in order to use the produce_trajectory_1D function
-
 # quadratic potential V with sine oscillation p
 T = 10.0
 trajectory = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=T)
@@ -421,8 +417,6 @@ They yield a bistable potential drift with a sine oscillation.
 ---
 # Examples
 ```julia
-using MDE_project
-
 # a slightly different potential (for illustrative reasons)
 ϵ = 0.1
 V(x) = -x^2 + x^4/12
@@ -505,8 +499,6 @@ A simple Euler-Maruyama discretization is implemented for the generation of the 
 ---
 # Examples
 ```julia
-using MDE_project # in order to use the produce_trajectory_1D function
-
 # quadratic potential V and fast separable oscillating part in 2D
 trajectory = Langevin_ϵ_2D([-5.0, -5.0], func_config=(x-> cos(x), x -> 1/2*cos(x)), M=[4 2;2 3], σ=5.0, ϵ=0.05, T=10.0)
 fig = produce_trajectory_2D(trajectory)
@@ -807,8 +799,6 @@ Generate a plot of a 2-dimensional (slow + fast dimension) multiscale time serie
 ---
 # Examples
 ```julia
-using MDE_project # in order to use the Langevin_ϵ function
-
 # quadratic potential V with sine oscillation p
 T = 10.0
 trajectory = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=T)
@@ -860,8 +850,6 @@ Generate a plot of a 4-dimensional (slow + fast dimension) multiscale time serie
 ---
 # Examples
 ```julia
-using MDE_project # in order to use the Langevin_ϵ_2D function
-
 # quadratic potential V and fast separable oscillating part in 2D
 trajectory = Langevin_ϵ_2D([-5.0, -5.0], func_config=(x-> cos(x), x -> 1/2*cos(x)), M=[4 2;2 3], σ=5.0, ϵ=0.05, T=10.0)
 fig = produce_trajectory_2D(trajectory)

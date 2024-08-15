@@ -9,4 +9,13 @@ export produce_trajectory_1D, produce_trajectory_2D
 
 include("multiscale_limit_pairs.jl")
 
+export μ, ∂ϑ_μ, ∂Σ_μ
+
+include("invariant_densities.jl")
+
+export Δ, k
+export Δ_Gaussian1D, Δ_Gaussian2D
+
+include("MDE_functionals.jl")
+
 end
