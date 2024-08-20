@@ -18,4 +18,14 @@ export Δ_Gaussian1D, Δ_Gaussian2D
 
 include("MDE_functionals.jl")
 
+export Δ_Gaussian1D_grad
+export Δ_grad_ϑ, Δ_grad_Σ
+
+include("MDE_gradients.jl")
+
+export Σ_∞_QdP
+export Σ_∞_QrP
+
+include("MDE_asymptotic_variances.jl")
+
 end

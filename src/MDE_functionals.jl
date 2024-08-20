@@ -46,38 +46,39 @@ end
 
 # convolution over which we have to integrate twice; once with respect to the data in a time integral,
 # once over the whole domain of the invariant density, i.e. R, cf. numerics section of main manuscript
-function inner_convol(x, ϑ, Σ)
-  HCubature.hquadrature(y -> μ(x-t(y), ϑ, Σ)k(t(y))[1]dt(y), -1, 1)[1]
+function inner_convol(x, ϑ, Σ, V = x -> x^4/4-x^2/2)
+  HCubature.hquadrature(y -> μ(x-t(y), ϑ, Σ, V)k(t(y))[1]dt(y), -1, 1)[1]
 end
 
 # space integral in cost functional, integration of inner_convol over R, see above
-function convol_GD(ϑ, Σ)
-  f(y) = inner_convol(t(y), ϑ, Σ)μ(t(y), ϑ, Σ)dt(y)
+function convol(ϑ, Σ, V = x -> x^4/4-x^2/2)
+  f(y) = inner_convol(t(y), ϑ, Σ)μ(t(y), ϑ, Σ, V)dt(y)
   # functions are symmetric in the considered cases
   2HCubature.hquadrature(f, 0, 1)[1]
 end
 
 # time integral in cost functional, integration of inner_convol over data points, see above; serial version;
 # no division by N here since we use this serial version for the parallel version below, division by N occurs there
-function time_integral(data, ϑ, Σ)
+function time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
   N = length(data)
   integral_val = 0.0
 
   for i in 1:N
-    integral_val += inner_convol(data[i], ϑ, Σ)  
+    integral_val += inner_convol(data[i], ϑ, Σ, V)  
   end
 
   -2integral_val
 end
 
 # time integral in cost functional; parallel version via multithreading; written with data-race freedom
-function multi_time_integral(data, ϑ, Σ)
+function multi_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
   N = length(data)
+  # divison by 100 depending on number of threads
   data_batches = Iterators.partition(data, convert(Int, N/100))
   sum_atomic = Threads.Atomic{Float64}(0)
 
   @inbounds Threads.@threads for data_batch in collect(data_batches)
-    res = time_integral(data_batch, ϑ, Σ)
+    res = time_integral(data_batch, ϑ, Σ, V)
     Threads.atomic_add!(sum_atomic, res)
   end 
   sum_atomic[]/N
@@ -85,28 +86,19 @@ end
 
 # complete cost functional, parallel version via multi-threading
 @doc raw"""
-    Δ(data, ϑ, Σ)
+    Δ(data, ϑ, Σ, V)
 
 Compute cost functional for given `data` and parameter values `ϑ` and `Σ`.
 
-A properly discretized version of the cost functional given by
+A properly discretized version of the cost functional, given by
 ```math
 \begin{aligned}
-  \Delta_T(\vartheta, \Sigma, X_\epsilon) = - \frac{2}{T} \int_0^T (\mu(\vartheta, \Sigma) \ast k_\beta)(X_\epsilon(t)) \, dt + \int_{\R} (\mu(\vartheta, \Sigma) \ast k_\beta)(x) \mu(\vartheta, \Sigma, x) \, dx,
+  \Delta_T(X_\epsilon, \vartheta, \Sigma, V) = - \frac{2}{T} \int_0^T (\mu(\vartheta, \Sigma, V) \ast k_\beta)(X_\epsilon(t)) \, dt + \int_{\R} (\mu(\vartheta, \Sigma, V) \ast k_\beta)(x) \mu(\vartheta, \Sigma, x) \, dx,
 \end{aligned}
 ```
 is implemented and evaluated via [multithreading](https://docs.julialang.org/en/v1/manual/multi-threading/). Here, ``X_ϵ`` is a one-dimensional time series of length ``T``,
 obtained from a multiscale SDE, ``\mu`` is the invariant density of the homogenized limit SDE, ``k_\beta`` refers to [`k`](@ref), and ``\ast`` is the convolution operator on ``\R``.
 See the main manuscript for details on this functional. It is the core object of the MDE.
-
-!!! warning "Formula for a specific potential!"
-    The above formula of the cost functional employs the following rather specific invariant density 
-    ```math
-    \begin{aligned}
-      \mu(x, \vartheta, \Sigma) = \frac{1}{Z(ϑ, Σ)} \exp\left( -\frac{\vartheta}{\Sigma} V(x) \right), \quad V(x) = x^2/2 + x^4/4, \quad x \in \R.
-    \end{aligned}
-    ```
-    This will be changed soon to allow for other potentials ``V``.
 
 !!! warning 
     The computational cost of this function is quite high due to the integration of the convolutions, so if the data is finely discretized, then
@@ -123,6 +115,7 @@ See the main manuscript for details on this functional. It is the core object of
 - `data::Vector{Real}`:         one-dimensional time series ``X_ϵ``.
 - `ϑ::Real`:                    positive drift coefficient ``\vartheta``.
 - `Σ::Real`:                    positive diffusion coefficient ``\Sigma``.
+- `V=x -> x^4/4-x^2/2`:         defining potential function ``V`` for the invariant density.
 
 ---
 # Examples
@@ -137,12 +130,12 @@ julia> Δ(data, 1, 1)
 ```
 
 ---
-See also [`Δ_Gaussian1D`](@ref), [`Δ_Gaussian2D`](@ref)..
+See also [`Δ_Gaussian1D`](@ref), [`Δ_Gaussian2D`](@ref).
 """
-function Δ(data, ϑ, Σ)
+function Δ(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
   time_stamp = Dates.format(now(), "HH:MM:SS")
   @info "⊙ $(time_stamp) - Functional call with parameter values ($(ϑ),$(Σ))."
-  convol_GD(ϑ, Σ) + multi_time_integral(data, ϑ, Σ)
+  convol(ϑ, Σ, V) + multi_time_integral(data, ϑ, Σ, V)
 end
 
 ## Gaussian case in 1D via exact distance formula ##
@@ -150,12 +143,12 @@ end
 @doc raw"""
     Δ_Gaussian1D(data, ϑ, Σ)
 
-Compute cost functional for given one-dimensonal `data` and parameter values `ϑ` and `Σ` in the case where the invariant density of the homogenized limit SDE is Gaussian.
+Compute cost functional for given one-dimensonal `data` and parameter values `ϑ` and `Σ` in the case where the invariant density of the homogenized limit SDE is centered Gaussian.
 
-A properly discretized version of the cost functional given by
+A properly discretized version of the cost functional, given by
 ```math
 \begin{aligned}
-  \Delta_T(\vartheta, \Sigma, X_\epsilon) = - \frac{2}{T \sqrt{1 + \beta^2 \frac{\Sigma}{\vartheta}} } \int_0^T \exp\left( -\frac{\beta^2 X_\epsilon(t)^2}{2 (1 + \beta^2 \frac{\Sigma}{\vartheta})} \right) \, dt + \frac{1}{\sqrt{1 + 2 \beta^2 \frac{\Sigma}{\vartheta}}},
+  \Delta_T(X_\epsilon, \vartheta, \Sigma) = -\frac{2}{T \sqrt{1 + \beta^2 \frac{\Sigma}{\vartheta}} } \int_0^T \exp\left( -\frac{\beta^2 X_\epsilon(t)^2}{2 (1 + \beta^2 \frac{\Sigma}{\vartheta})} \right) \, dt + \frac{1}{\sqrt{1 + 2 \beta^2 \frac{\Sigma}{\vartheta}}},
 \end{aligned}
 ```
 is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``, obtained from a multiscale SDE, and ``\beta`` comes from [`k`](@ref).
@@ -223,12 +216,12 @@ end
 @doc raw"""
     Δ_Gaussian2D(data, ϑ, Σ)
 
-Compute cost functional for given two-dimensonal `data` and parameter values `ϑ` and `Σ` in the case where the invariant density of the homogenized limit SDE is Gaussian.
+Compute cost functional for given two-dimensonal `data` and parameter values `ϑ` and `Σ` in the case where the invariant density of the homogenized limit SDE is centered Gaussian.
 
-A properly discretized version of the cost functional given by
+A properly discretized version of the cost functional, given by
 ```math
 \begin{aligned}
-  \Delta_T(\vartheta, \Sigma, X_\epsilon) &= - \frac{2}{T \sqrt{\det(I_d + \beta^2 M(\vartheta, \Sigma)) }} \int_0^T \exp\left( -\frac{\beta^2}{2} X_\epsilon(t)^\top \left( I_d + \beta^2 M(\vartheta, \Sigma) \right)^{-1} X_\epsilon(t) \right) \, dt \\[0.25cm]
+  \Delta_T(X_\epsilon, \vartheta, \Sigma) &= - \frac{2}{T \sqrt{\det(I_d + \beta^2 M(\vartheta, \Sigma)) }} \int_0^T \exp\left( -\frac{\beta^2}{2} X_\epsilon(t)^\top \left( I_d + \beta^2 M(\vartheta, \Sigma) \right)^{-1} X_\epsilon(t) \right) \, dt \\[0.25cm]
     &+ \frac{1}{\sqrt{\det(I_d + 2 \beta^2 M(\vartheta, \Sigma))}},
 \end{aligned}
 ```
