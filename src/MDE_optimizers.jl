@@ -1,185 +1,280 @@
 ########################################################################################################
 ########################################################################################################
-# Minimization of weighted L² distance as per main manuscript (cost functional J) with respect to 
-# drift parameter. Data comes as a trajectory of a multiscale process. Optimization is performed 
-# with the Julia package Optim.jl.
-########################################################################################################
-# SDE: Overdamped Langevin Diffusion with a fast oscillating part in 1D
-# Effective drift function: derived from a quadratic potential
+# The main object of computation. The optimization task of the MDE is performed here for various
+# examples of defining limit models.
 ########################################################################################################
 ########################################################################################################
-# Jaroslav Borodavka, 28.04.2024
+# Jaroslav Borodavka, 21.08.2024
 
 # required packages
-using Optim, JLD2
-using LaTeXStrings  # for latex symbols in titles, legends, etc.; a latexstring is denoted by L""
+using Optim
 
-# required other files in the folder
-include("MDE_gradients.jl")
-include("MDE_Gaussian.jl")
+########################################################################################################
+## optimizers for the MDE
+########################################################################################################
 
-# parameters
-α = 2.0;                println("⎔ drift coefficient of multiscale process: α = $(α)")
-σ = 1.0;                println("⎔ diffusion coefficient of multiscale process: σ = $(σ)")      
-drift = LDO()           # linear drift function 
-A = α*K(drift[3], σ);   println("⎔ drift coefficient of effective process: A = $(A)")          
-Σ = σ*K(drift[3], σ);   println("⎔ diffusion coefficient of effective process: Σ = $(Σ)")
-T = 1000;               println("⎔ time horizon: T = $(T)")
-ϵ = 0.1;                println("⎔ small scale parameter: ϵ = $(ϵ)")
-dt = 1e-3;              println("⎔ time discretization: dt = $(dt)")
+## limit model: 1-dimensional Ornstein-Uhlenbeck process / Langevin process with a quadratic potential ##
 
-# include here since there is a constant factor in that script which is computed on basis of A and Σ
-include("asymptotic_variance.jl")
+@doc raw"""
+    MDE(data::Array{Float64, 1}, limit_model::String, prior_parameter::Float64, ϑ_initial::Float64; verbose = false)
 
-# data
-data_eps = Overdamped_LO_eps_1D(x0=10.0, func_config=drift, alpha=α, sigma=σ, eps=ϵ, T=T, dt=dt)[1]
-#data_limit = Overdamped_LO_limit_1D(X0=10.0, V_prime=drift[2], p=drift[3], alpha=α, sigma=σ, T=T, dt=dt)
+Return MDE value for given `data` in form of a time series, a defining `limit_model`, a prior estimation parameter `prior_parameter`, and an initial point `ϑ_initial`
+of the involved optimization procedure.
 
-# cost functional and gradient
-J(θ) = Δ_Gaussian1D(data_eps, θ, Σ)
-∇J(θ) = Δ_Gaussian1D_grad(data_eps, θ, Σ)
+The optimization task
+```math
+\begin{aligned}
+  \argmin_{\vartheta \in \Theta} \Delta_T(X_\epsilon, \vartheta, \Sigma, V),
+\end{aligned}
+```
+is implemented and solved with the Julia package [Optim.jl](https://julianlsolvers.github.io/Optim.jl/stable/). Here, ``X_ϵ`` is a one-dimensional time series of length ``T``,
+obtained from a multiscale SDE, ``\Delta_T`` is the associated cost functional of the MDE, see [`Δ_Gaussian1D`](@ref), ``\Sigma`` is the `prior_parameter`, and ``V`` is a potential that
+is, in the given case, quadratic, i.e. ``V(x)=x^2/2``.
 
-# gradient of cost functional, specifically written for Optim.optimize
-function gradient!(storage, θ)
-    storage[1] = ∇J(θ[1])
-end
+---
+# Arguments
+- `data::Array{Float64, 1}`:    one-dimensional time series ``X_ϵ``.
+- `limit_model::String`:        defining limit model; thus far only supports "Langevin" and "Fast Chaotic Noise".
+- `prior_parameter::Float64`:   prior estimation parameter; limit diffusion parameter in the "Langevin" case and limit drift parameter in the "Fast Chaotic Noise" case.
+- `ϑ_initial::Float64`:         initial point of the numerical optimization procedure.
+- 'verbose::Bool':              if `verbose = true`, then detailed information on the optimization will be printed in real-time.
 
-# specifying boundary constraints, otherwise we might get an error for negative values
-initial_θ = 10.0
-lower = 0.0
-upper = Inf
-inner_optimizer = LBFGS()
+---
+# Examples
+```julia-repl
+julia> using MDE_project
+julia> limit_drift_parameter = 1.0
+julia> data = Fast_chaotic_ϵ([1.0, 1.0, 1.0, 1.0], A=-limit_drift_parameter, B=0.0, λ=2/45, ϵ=0.1, T=1000)
+julia> MDE(data, "Fast Chaotic Noise", limit_drift_parameter, 10.0) # ≈0.112
+```
 
-# small Monte Carlo study for robustness
-T_range = 1000 #range(50, 2000, 40)
-T_length = length(T_range)
-optimizer_aver_values = Array{Float64}(undef, T_length)
-optimizer_stdev_values = Array{Float64}(undef, T_length)
-optimizer_values = Array{Float64}(undef, reps)
-reps = 1000
+---
+See also [`Δ_Gaussian1D_grad`](@ref).
+"""
+function MDE(data::Array{Float64, 1}, limit_model::String, prior_parameter::Float64, ϑ_initial::Float64; verbose = false)
 
-for i in 1:T_length
-    optimizer_values = Array{Float64}(undef, reps)
-    for j in 1:reps
-        data_eps = Overdamped_LO_eps_1D(x0=10.0, func_config=drift, alpha=α, sigma=σ, eps=ϵ, T=T_range[i], dt=dt)[1]
-        optim_res = optimize(θ -> J(first(θ)), gradient!, [lower], [upper], [initial_θ], Fminbox(inner_optimizer), Optim.Options(show_trace = true))   
-        optimizer_values[j] = Optim.minimizer(optim_res)[1]
+    # specifying boundary constraints, since the parameter lies in (0, ∞)
+    lower = 0.0
+    upper = Inf
+    # optimizer for box-constrained optimization
+    inner_optimizer = LBFGS()
+
+    println("⎔ GD initial point: ϑ₀ = $(round(ϑ_initial, digits = 3))")
+
+    # cost functional, gradient and optimization depending on the limit model
+    if limit_model == "Langevin"
+        J_L(ϑ) = Δ_Gaussian1D(data, ϑ, prior_parameter)
+        ∇J_L(ϑ) = Δ_Gaussian1D_grad(data, ϑ, prior_parameter)
+
+        # gradient of cost functional, specifically written for Optim.optimize
+        function gradient!(storage, ϑ)
+            storage[1] = ∇J_L(ϑ[1])
+        end
+
+        # optimize with Optim.jl
+        optim_res = optimize(ϑ -> J_L(first(ϑ)), gradient!, [lower], [upper], [ϑ_initial], 
+        Fminbox(inner_optimizer), Optim.Options(show_trace = verbose, g_tol=1e-6))
+    elseif limit_model == "Fast Chaotic Noise"
+        J_FCN(ϑ) = Δ_Gaussian1D(data, prior_parameter, ϑ/2)
+        
+        # optimize with Optim.jl; using forward automatic differentiation for gradient
+        optim_res = optimize(ϑ -> J_FCN(first(ϑ)), [lower], [upper], [ϑ_initial], 
+        Fminbox(inner_optimizer), Optim.Options(show_trace = verbose, g_tol=1e-6), autodiff = :forward)
     end
-    
-    optimizer_aver_values[i] = mean(optimizer_values)
-    optimizer_stdev_values[i] = std(optimizer_values)
+ 
+    @show optim_res
+    println("✪ MDE value: $(round(Optim.minimizer(optim_res)[1], digits = 6))")
+    Optim.minimizer(optim_res)
 end
 
-@show optimizer_aver_values
-@show optimizer_stdev_values
+## limit model: 1-dimensional Langevin process with a general potential V ##
 
-# saving output data
-#jldsave("optimizer_values_eps01.jld2"; optimizer_aver_values_eps01 = optimizer_aver_values, optimizer_stdev_values_eps01 = optimizer_stdev_values)
-#jldsave("MDE_Gaussian_optimizer_values_T1000.jld2"; optimizer_values = optimizer_values)
+@doc raw"""
+    MDE(data::Array{Float64, 1}, limit_model::String, V, prior_parameter::Float64, ϑ_initial::Float64; verbose = false)
 
-# visualization of robustness
+Return MDE value for given `data` in form of a time series, a defining `limit_model`, a general potential `V`, a prior estimation parameter `prior_parameter`, and an initial point `ϑ_initial`
+of the involved optimization procedure.
 
-# loading required output data
-#optimizer_aver_values = load("MDE_Gaussian_optimizer_values_eps01.jld2")["optimizer_aver_values_eps01"];     optimizer_stdev_values = load("MDE_Gaussian_optimizer_values_eps01.jld2")["optimizer_stdev_values_eps01"]
-#optimizer_aver_values = load("MDE_Gaussian_optimizer_values_eps025.jld2")["optimizer_aver_values_eps025"];     optimizer_stdev_values = load("MDE_Gaussian_optimizer_values_eps025.jld2")["optimizer_stdev_values_eps025"]
+The optimization task
+```math
+\begin{aligned}
+  \argmin_{\vartheta \in \Theta} \Delta_T(X_\epsilon, \vartheta, \Sigma, V),
+\end{aligned}
+```
+is implemented and solved with the Julia package [Optim.jl](https://julianlsolvers.github.io/Optim.jl/stable/). Here, ``X_ϵ`` is a one-dimensional time series of length ``T``,
+obtained from a multiscale SDE, ``\Delta_T`` is the associated cost functional of the MDE, see [`Δ`](@ref), ``\Sigma`` is the `prior_parameter`, and ``V`` is a general potential.
 
-val_l = minimum(optimizer_aver_values-1.2optimizer_stdev_values)
-val_u = maximum(optimizer_aver_values+1.2optimizer_stdev_values)
+---
+# Arguments
+- `data::Array{Float64, 1}`:    one-dimensional time series ``X_ϵ``.
+- `limit_model::String`:        defining limit model; thus far only supports "Langevin" and "Fast Chaotic Noise".
+- `V`:                          potential ``V`` that defines the invariant density of the limit model.
+- `prior_parameter::Float64`:   prior estimation parameter; limit diffusion parameter in the "Langevin" case and limit drift parameter in the "Fast Chaotic Noise" case.
+- `ϑ_initial::Float64`:         initial point of the numerical optimization procedure.
+- 'verbose::Bool':              if `verbose = true`, then detailed information on the optimization will be printed in real-time.
 
-# create and adjust figure components
-robustness_fig = Figure(size=(2560,1440), fontsize = 40)
-robustness_ax = Axis(robustness_fig[1, 1],
-    # title
-    title = L"MDE estimates $\hat{\vartheta}_T \; (X_\epsilon)$ for $\vartheta_0$ when $\epsilon = 0.25$",
-    titlegap = 25,
-    titlesize = 50,
-    # x-axis
-    xlabel = L"T",
-    xticks = LinearTicks(5),
-    # y-axis
-    yticks = LinearTicks(10),
-)
-Makie.xlims!(robustness_ax, T_range[begin], T_range[end]), Makie.ylims!(robustness_ax, val_l, val_u)
-colsize!(robustness_fig.layout, 1, Aspect(1, 1.8))
+---
+# Examples
+```julia-repl
+julia> using MDE_project
+julia> limit_drift_parameter = 1.0
+julia> data = Fast_chaotic_ϵ([1.0, 1.0, 1.0, 1.0], A=limit_drift_parameter, B=1.0, λ=2/45, ϵ=10^(-3/2), T=100)
+julia> V = NLDO()[1]
+julia> MDE(data, "Fast Chaotic Noise", V, limit_drift_parameter, 0.8)
+```
 
-STD_band = band!(robustness_ax, T_range, optimizer_aver_values-optimizer_stdev_values, optimizer_aver_values+optimizer_stdev_values,
-                color = (:lightblue, 0.5)
-)
-MDE_line = lines!(robustness_ax, T_range, optimizer_aver_values, linewidth = 3.0)
-A_line = hlines!(robustness_ax, A, color = (:red, 0.8), linewidth = 5.0, linestyle = :dash)
+---
+See also [`Δ_grad_ϑ`](@ref), [`Δ_grad_Σ`](@ref), [`μ`](@ref).
+"""
+function MDE(data::Array{Float64, 1}, limit_model::String, V, prior_parameter::Float64, ϑ_initial::Float64; verbose = false)
+    # specifying boundary constraints, since the parameter lies in (0, ∞)
+    lower = 0.0
+    upper = Inf
+    # optimizer for box-constrained optimization
+    inner_optimizer = LBFGS()
 
-axislegend(robustness_ax,
-    [A_line, MDE_line, STD_band],
-    [L"True drift parameter $\vartheta_0$", L"MDE estimates $\hat{\vartheta}_T \; (X_\epsilon)$", L"$1$ standard deviation band"]
-)
-robustness_fig
+    println("⎔ GD initial point: ϑ₀ = $(round(ϑ_initial, digits = 3))")
 
-#save("MDE_Gaussian_1D_robustness_eps025.pdf",robustness_fig)
+    # cost functional, gradient and optimization depending on the limit model
+    if limit_model == "Langevin"
+        J_L(ϑ) = Δ(data, ϑ, prior_parameter, V)
+        ∇J_L(ϑ) = Δ_grad_ϑ(data, ϑ, prior_parameter, V)
 
-# visualization of asymptotic normality
+        # gradient of cost functional, specifically written for Optim.optimize
+        function gradient_L!(storage, ϑ)
+            storage[1] = ∇J_L(ϑ[1])
+        end
 
-# loading required output data
-#optimizer_values = load("MDE_Gaussian_optimizer_values_T1000.jld2")["optimizer_values"]
+        # optimize with Optim.jl
+        optim_res = optimize(ϑ -> J_L(first(ϑ)), gradient_L!, [lower], [upper], [ϑ_initial], 
+        Fminbox(inner_optimizer), Optim.Options(show_trace = verbose, g_tol=1e-6))
+    elseif limit_model == "Fast Chaotic Noise"
+        J_FCN(ϑ) = Δ(data, prior_parameter, ϑ/2, V)
+        ∇J_FCN(ϑ) = Δ_grad_Σ(data, prior_parameter, ϑ/2, V)
 
-standardized_optim_values = sqrt(T_range)*(optimizer_values.-A)
+        # gradient of cost functional, specifically written for Optim.optimize
+        function gradient_FCN!(storage, ϑ)
+            storage[1] = ∇J_FCN(ϑ[1])
+        end
+        
+        # optimize with Optim.jl
+        optim_res = optimize(ϑ -> J_FCN(first(ϑ)), gradient_FCN!, [lower], [upper], [ϑ_initial], 
+        Fminbox(inner_optimizer), Optim.Options(show_trace = verbose, g_tol=1e-6))
+    end
+ 
+    @show optim_res
+    println("✪ MDE value: $(round(Optim.minimizer(optim_res)[1], digits = 6))")
+    Optim.minimizer(optim_res)
+end
 
-asy_var = Σ_∞_l(A, Σ)
-MDE_∞(x) = pdf(Normal(0, sqrt(asy_var)), x)
-x_range = range(-6,6,1000)
-MDE_∞_val = map(MDE_∞, x_range)
+## limit model: 2-dimensional Ornstein-Uhlenbeck process / Langevin process with a quadratic potential ##
 
-# create and adjust figure components
-asy_fig = Figure(size=(2560,1440), fontsize = 40)
-asy_ax = Axis(asy_fig[1, 1],
-    # title
-    title = L"MDE estimates $\sqrt{T}\left(\hat{\vartheta}_{T} \; (X_\epsilon) - \vartheta_0\right)$ for $T=1000$",
-    titlegap = 25,
-    titlesize = 50,
-    # x-axis
-    xlabel = L"\vartheta",
-    xticks = LinearTicks(5),
-    # y-axis
-    yticks = LinearTicks(10),
-)
-colsize!(asy_fig.layout, 1, Aspect(1, 1.8))
+@doc raw"""
+    MDE(data::Array{Float64, 2}, limit_diffusion::Array{Float64, 2}, ϑ_initial::Array{Float64, 2}; verbose = false)
 
-#MDE_density = density!(asy_ax, standardized_optim_values, color = (:blue, 0.3), strokecolor = :blue, strokewidth = 2.0, strokearound = true)
+Return MDE value for given `data` in form of a time series a prior estimation parameter `limit_diffusion`, and an initial point `ϑ_initial`
+of the involved optimization procedure.
 
-# bin number for histogram set according to Freedman-Diaconis rule where IQR is the interquartile range    
-n = length(standardized_optim_values)
-q75 = quantile(standardized_optim_values, 0.75)
-q25 = quantile(standardized_optim_values, 0.25)
-IQR = q75 - q25
-FD = 2IQR/n^(1/3)
-bin_num = round((maximum(standardized_optim_values)-minimum(standardized_optim_values))/FD)
+The optimization task
+```math
+\begin{aligned}
+  \argmin_{\vartheta \in \Theta} \Delta_T(X_\epsilon, \vartheta, \Sigma, V),
+\end{aligned}
+```
+is implemented and solved with the Julia package [Optim.jl](https://julianlsolvers.github.io/Optim.jl/stable/). Here, ``X_ϵ`` is a two-dimensional time series of length ``T``,
+obtained from a multiscale SDE, ``\Delta_T`` is the associated cost functional of the MDE, see [`Δ_Gaussian2D`](@ref), ``\Sigma`` is the prior 2x2 limit diffusion matrix.
+The initial point `ϑ_initial` must satisfy certain parameter constraints since the optimization has nonlinear contraints, see manuscript or source code.
 
-MDE_hist = hist!(asy_ax, standardized_optim_values, 
-                bins =  convert(Int64, bin_num), color = (:lightblue, 0.7),
-                strokewidth = 1.0, strokecolor = :black, 
-                normalization = :pdf
-)
-asy_line = lines!(asy_ax, x_range, MDE_∞_val, 
-                linewidth = 3.0, linestyle = :dash, 
-                color = (:red, 0.8)
-)
+---
+# Arguments
+- `data::::Array{Float64, 2}`:             two-dimensional time series ``X_ϵ``.
+- `limit_diffusion::Array{Float64, 2}`:    positive definite limit diffusion matrix ``\Sigma \in \mathbb{R}^{2 \times 2}``.
+- `ϑ_initial::Array{Float64, 2}`:          initial point ``\vartheta_0 \in \mathbb{R}^{2 \times 2}`` of the numerical optimization procedure.
+- 'verbose::Bool':                         if `verbose = true`, then detailed information on the optimization will be printed in real-time.
 
-axislegend(asy_ax,
-    [asy_line],
-    [L"Asymptotic Distribution $J(\vartheta_0)^{-1} \mathcal{N}(0,\; \tau^2(\vartheta_0))$"]
-)
-asy_fig
+---
+# Examples
+```julia-repl
+julia> using MDE_project
+julia> M = [4 2;2 3]
+julia> σ = 1.5               
+julia> p1, p2 = (x -> sin(x), x -> 1/2*sin(x))     
+julia> p1_prime, p2_prime = (x-> cos(x), x -> 1/2*cos(x))
+julia> CorrK = [K(p1, σ) 0 ; 0 K(p2, σ)]
+julia> A = CorrK*M # true parameter; the parameter that ought to be estimated
+julia> Σ = σ*CorrK
+julia> data = Langevin_ϵ_2D([-5.0, -5.0], func_config=(p1_prime, p2_prime), M=M, σ=σ, ϵ=0.1, T=1000)[1]
+julia> ϑ_initial = [3.0 0.5*Σ[1]; 0.5*Σ[4] 6.0]
+julia> MDE(data, Σ, ϑ_initial)
+```
 
-save("MDE_Gaussian_1D_normality_T1000.pdf", asy_fig)
+---
+See also [`Δ_Gaussian2D`](@ref).
+"""
+function MDE(data::Array{Float64, 2}, limit_diffusion::Array{Float64, 2}, ϑ_initial::Array{Float64, 2}; verbose = false)
 
+    # cost functional and gradient
+    J(ϑ) = Δ_Gaussian2D(data, ϑ, limit_diffusion)
 
-#=
-@time J(A)
-@time ∇J(A)
+    # diagonal elements of the limit diffusion matrix
+    Σ11 = limit_diffusion[1,1]
+    Σ22 = limit_diffusion[2,2]
 
-# lineplot of cost functional for reality check
-θ_space = range(0.5, 1.5, 10)
-f, ax, l = lines(θ_space, map(J, θ_space))
-vlines!(ax, A, color = :red)
-f
-lines(θ_space, map(∇J, θ_space))
-=#
+    # nonlinear constraints on the parameter space
+    function con_func!(c, A)
+        c[1] = A[1]                         # First constraint
+        c[2] = A[1]A[4] - A[3]A[2]          # Second constraint
+        c[3] = A[2]/Σ11 - A[3]/Σ22          # Third constraint
+        c
+    end
+
+    function con_jacobian!(Jac, A)
+        # First constraint
+        Jac[1,1] = 1.0
+        Jac[1,2] = 0.0
+        Jac[1,3] = 0.0
+        Jac[1,4] = 0.0
+        # Second constraint 
+        Jac[2,1] = A[4]
+        Jac[2,2] = -A[3]
+        Jac[2,3] = -A[2]
+        Jac[2,4] = A[1]
+        # Third constraint 
+        Jac[3,1] = 0.0
+        Jac[3,2] = 1/Σ11
+        Jac[3,3] = -1/Σ22
+        Jac[3,4] = 0.0
+        Jac
+    end
+
+    function con_hessian!(Hess, A, λ)
+        # only the second nonlinear constraint has nontrivial contribution to the hessian
+        Hess[1,4] += λ[2]
+        Hess[2,3] += -λ[2]
+        Hess[3,2] += -λ[2]
+        Hess[4,1] += λ[2]
+        Hess
+    end
+
+    # constraint check for initial point
+    if !(con_func!(fill(0.0, 3), ϑ_initial) > fill(0.0, 3))
+        return @warn "The initial point for the optimization $(ϑ_initial) does not fulfill the parameter constraints. Type ?MDE for info."
+    end
+
+    # parameter bounds, constraint bounds and problem definition for Optim.jl
+    lx = fill(-Inf, 4); ux = fill(Inf, 4)
+    lc = [0.0, 0.0, 0.0]; uc = [Inf, Inf, 0.0]
+    dfc = TwiceDifferentiableConstraints(con_func!, con_jacobian!, con_hessian!, lx, ux, lc, uc)
+
+    # optimize with Optim.jl, using forward autodiff (forward automatic differentiation)
+    println("⎔ GD initial point: ϑ₀ = $(round.(ϑ_initial, digits = 3))")
+    optim_res = optimize(J, dfc, vec(ϑ_initial), IPNewton(),
+    Optim.Options(allow_f_increases=true, show_trace=verbose, g_tol=1e-6), autodiff=:forward)
+    @show optim_res
+
+    # result as a 2x2 matrix instead of a vector; transpose result of reshape() to get correct matrix
+    result_matrix = reshape(Optim.minimizer(optim_res), 2, 2)'
+    println("✪ MDE value: $(round.(result_matrix, digits = 6))")
+    result_matrix
+end
+

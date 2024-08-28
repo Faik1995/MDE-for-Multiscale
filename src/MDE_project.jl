@@ -28,4 +28,8 @@ export Σ_∞_QrP
 
 include("MDE_asymptotic_variances.jl")
 
+export MDE
+
+include("MDE_optimizers.jl")
+
 end

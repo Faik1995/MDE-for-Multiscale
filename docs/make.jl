@@ -10,5 +10,6 @@ makedocs(
         "Cost Functionals for the MDE" => "MDE_functionals.md",
         "Cost Functional Gradients for the MDE" => "MDE_gradients.md",
         "Asymptotic Variances of the MDE" => "MDE_asymptotic_variances.md",
+        "Optimization Task of the MDE" => "MDE_optimizers.md",
     ],
 )

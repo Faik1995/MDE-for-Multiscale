@@ -46,32 +46,32 @@ end
 
 # convolution over which we have to integrate twice; once with respect to the data in a time integral,
 # once over the whole domain of the invariant density, i.e. R, cf. numerics section of main manuscript
-function inner_convol(x, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function inner_convol(x, ϑ, Σ, V)
   HCubature.hquadrature(y -> μ(x-t(y), ϑ, Σ, V)k(t(y))[1]dt(y), -1, 1)[1]
 end
 
 # space integral in cost functional, integration of inner_convol over R, see above
-function convol(ϑ, Σ, V = x -> x^4/4-x^2/2)
-  f(y) = inner_convol(t(y), ϑ, Σ)μ(t(y), ϑ, Σ, V)dt(y)
+function convol(ϑ, Σ, V)
+  f(y) = inner_convol(t(y), ϑ, Σ, V)μ(t(y), ϑ, Σ, V)dt(y)
   # functions are symmetric in the considered cases
   2HCubature.hquadrature(f, 0, 1)[1]
 end
 
 # time integral in cost functional, integration of inner_convol over data points, see above; serial version;
 # no division by N here since we use this serial version for the parallel version below, division by N occurs there
-function time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function time_integral(data, ϑ, Σ, V)
   N = length(data)
   integral_val = 0.0
 
   for i in 1:N
-    integral_val += inner_convol(data[i], ϑ, Σ, V)  
+    integral_val = integral_val + inner_convol(data[i], ϑ, Σ, V)  
   end
 
   -2integral_val
 end
 
 # time integral in cost functional; parallel version via multithreading; written with data-race freedom
-function multi_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function multi_time_integral(data, ϑ, Σ, V)
   N = length(data)
   # divison by 100 depending on number of threads
   data_batches = Iterators.partition(data, convert(Int, N/100))
@@ -115,7 +115,7 @@ See the main manuscript for details on this functional. It is the core object of
 - `data::Vector{Real}`:         one-dimensional time series ``X_ϵ``.
 - `ϑ::Real`:                    positive drift coefficient ``\vartheta``.
 - `Σ::Real`:                    positive diffusion coefficient ``\Sigma``.
-- `V=x -> x^4/4-x^2/2`:         defining potential function ``V`` for the invariant density.
+- `V`:                          defining potential function ``V`` for the invariant density.
 
 ---
 # Examples
@@ -126,15 +126,15 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 julia> Threads.nthreads()
 julia> using MDE_project
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
-julia> Δ(data, 1, 1)
+julia> Δ(data, 1, 1, NLDO()[1])
 ```
 
 ---
 See also [`Δ_Gaussian1D`](@ref), [`Δ_Gaussian2D`](@ref).
 """
-function Δ(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function Δ(data, ϑ, Σ, V)
   time_stamp = Dates.format(now(), "HH:MM:SS")
-  @info "⊙ $(time_stamp) - Functional call with parameter values ($(ϑ),$(Σ))."
+  @info "⊙ $(time_stamp) - Functional call with parameter values ($(round(ϑ, digits=6)), $(round(Σ, digits=6)))."
   convol(ϑ, Σ, V) + multi_time_integral(data, ϑ, Σ, V)
 end
 
@@ -148,10 +148,10 @@ Compute cost functional for given one-dimensonal `data` and parameter values `ϑ
 A properly discretized version of the cost functional, given by
 ```math
 \begin{aligned}
-  \Delta_T(X_\epsilon, \vartheta, \Sigma) = -\frac{2}{T \sqrt{1 + \beta^2 \frac{\Sigma}{\vartheta}} } \int_0^T \exp\left( -\frac{\beta^2 X_\epsilon(t)^2}{2 (1 + \beta^2 \frac{\Sigma}{\vartheta})} \right) \, dt + \frac{1}{\sqrt{1 + 2 \beta^2 \frac{\Sigma}{\vartheta}}},
+  \Delta_T(X_\epsilon, \vartheta, \Sigma, V) = -\frac{2}{T \sqrt{1 + \beta^2 \frac{\Sigma}{\vartheta}} } \int_0^T \exp\left( -\frac{\beta^2 X_\epsilon(t)^2}{2 (1 + \beta^2 \frac{\Sigma}{\vartheta})} \right) \, dt + \frac{1}{\sqrt{1 + 2 \beta^2 \frac{\Sigma}{\vartheta}}},
 \end{aligned}
 ```
-is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``, obtained from a multiscale SDE, and ``\beta`` comes from [`k`](@ref).
+is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``, obtained from a multiscale SDE, and ``\beta`` comes from [`k`](@ref). The potential is here ``V(x) = x^2/2``.
 See the main manuscript for details on this functional. It is the core object of the MDE.
 
 !!! note 
@@ -200,7 +200,7 @@ function transf_data_2D(data, ϑ, Σ)
   N = length(data[1,:])
   I_d = I[1:d,1:d]  # identity matrix
   β = k(0)[2]
-  ϑ_inv = inv(ϑ)
+  ϑ_inv = inv([ϑ[1] ϑ[2]; ϑ[3] ϑ[4]])
   inverse_mat = inv(I_d + β^2*ϑ_inv*Σ)
   det_ϑ_Σ = det(I_d + β^2*ϑ_inv*Σ)
 

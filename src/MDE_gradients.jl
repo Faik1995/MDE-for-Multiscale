@@ -15,12 +15,12 @@
 ## drift parameter estimation (e.g. Langevin) ##
 
 # inner convolution expression in gradient of cost functional; derivative of inner_convol with respect to ϑ
-function ∂ϑ_inner_convol(x, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂ϑ_inner_convol(x, ϑ, Σ, V)
     HCubature.hquadrature(y -> ∂ϑ_μ(x-t(y), ϑ, Σ, V)k(t(y))[1]dt(y), -1, 1)[1]
 end
 
 # space integral in gradient of cost functional
-function ∂ϑ_convol(ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂ϑ_convol(ϑ, Σ, V)
     f(y) = 2inner_convol(t(y), ϑ, Σ, V)∂ϑ_μ(t(y), ϑ, Σ, V)dt(y)
     # functions are symmetric
     2HCubature.hquadrature(f, 0, 1)[1]
@@ -28,7 +28,7 @@ end
 
 # time integral in gradient of cost functional, integration of ∂ϑ_inner_convol over data points, see above; serial version;
 # no division by N here since we use this serial version for the parallel version below, division by N occurs there
-function ∂ϑ_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂ϑ_time_integral(data, ϑ, Σ, V)
     N = convert(Int, length(data))
     integral_val = 0.0
   
@@ -40,7 +40,7 @@ function ∂ϑ_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
 end
 
 # time integral in gradient of cost functional; parallel version via multithreading; written with data-race freedom
-function ∂ϑ_multi_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂ϑ_multi_time_integral(data, ϑ, Σ, V)
     N = length(data)
     # divison by 100 depending on number of threads
     data_batches = Iterators.partition(data, convert(Int, N/100))
@@ -76,9 +76,9 @@ obtained from a multiscale SDE, ``\mu`` is the invariant density of the homogeni
 ---
 # Arguments
 - `data::Vector{Real}`:         one-dimensional time series ``X_ϵ``.
-- `ϑ::Real`:                    positive drift coefficient ``\vartheta``.
+- `ϑ::Real`:                    drift coefficient ``\vartheta``.
 - `Σ::Real`:                    positive diffusion coefficient ``\Sigma``.
-- `V=x -> x^4/4-x^2/2`:         defining potential function ``V`` for the invariant density.
+- `V`:                          defining potential function ``V`` for the invariant density.
 
 ---
 # Examples
@@ -89,27 +89,27 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 julia> Threads.nthreads()
 julia> using MDE_project
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
-julia> Δ_grad_ϑ(data, 1, 1)
+julia> Δ_grad_ϑ(data, 1, 1, NLDO()[1])
 ```
 
 ---
 See also [`Δ`](@ref).
 """
-function Δ_grad_ϑ(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function Δ_grad_ϑ(data, ϑ, Σ, V)
     time_stamp = Dates.format(now(), "H:MM:SS")
-    @info "∇ $(time_stamp) - Gradient call with parameter value ($(ϑ),$(Σ))."
+    @info "∇ $(time_stamp) - Gradient call with parameter values ($(round(ϑ, digits=6)), $(round(Σ, digits=6)))."
     ∂ϑ_convol(ϑ, Σ, V) + ∂ϑ_multi_time_integral(data, ϑ, Σ, V)
 end
 
 ## diffusion parameter estimation (e.g. Fast Chaotic Noise) ##
 
 # inner convolution expression in gradient of cost functional; derivative of inner_convol with respect to Σ
-function ∂Σ_inner_convol(x, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂Σ_inner_convol(x, ϑ, Σ, V)
     HCubature.hquadrature(y -> ∂Σ_μ(x-t(y), ϑ, Σ, V)k(t(y))[1]dt(y), -1, 1)[1]
 end
 
 # space integral in gradient of cost functional
-function ∂Σ_convol(ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂Σ_convol(ϑ, Σ, V)
     f(y) = 2inner_convol(t(y), ϑ, Σ, V)∂Σ_μ(t(y), ϑ, Σ, V)dt(y)
     # functions are symmetric
     2HCubature.hquadrature(f, 0, 1)[1]
@@ -117,7 +117,7 @@ end
 
 # time integral in gradient of cost functional, integration of ∂Σ_inner_convol over data points, see above; serial version;
 # no division by N here since we use this serial version for the parallel version below, division by N occurs there
-function ∂Σ_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂Σ_time_integral(data, ϑ, Σ, V)
     N = convert(Int, length(data))
     integral_val = 0.0
   
@@ -129,7 +129,7 @@ function ∂Σ_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
 end
 
 # time integral in gradient of cost functional; parallel version via multithreading; written with data-race freedom
-function ∂Σ_multi_time_integral(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function ∂Σ_multi_time_integral(data, ϑ, Σ, V)
     N = length(data)
     # divison by 100 depending on number of threads
     data_batches = Iterators.partition(data, convert(Int, N/100))
@@ -157,15 +157,6 @@ A properly discretized version of the gradient of the cost functional, given by
 is implemented and evaluated via [multithreading](https://docs.julialang.org/en/v1/manual/multi-threading/). Here, ``X_ϵ`` is a one-dimensional time series of length ``T``,
 obtained from a multiscale SDE, ``\mu`` is the invariant density of the homogenized limit SDE corresponding to [`μ`](@ref), ``k_\beta`` refers to [`k`](@ref), and ``\ast`` is the convolution operator on ``\R``.
 
-!!! warning "Formula for a specific potential!"
-    The above formula of the cost functional employs the following rather specific invariant density 
-    ```math
-    \begin{aligned}
-      \mu(x, \vartheta, \Sigma) = \frac{1}{Z(ϑ, Σ)} \exp\left( -\frac{\vartheta}{\Sigma} V(x) \right), \quad V(x) = x^2/2 + x^4/4, \quad x \in \R.
-    \end{aligned}
-    ```
-    This will be changed soon to allow for other potentials ``V``.
-
 !!! warning 
     The computational cost of this function is quite high due to the integration of the convolutions, so if the data is finely discretized, then
     the running times for a single evalutation are relatively long. Remember that, in this case of a 
@@ -174,9 +165,9 @@ obtained from a multiscale SDE, ``\mu`` is the invariant density of the homogeni
 ---
 # Arguments
 - `data::Vector{Real}`:         one-dimensional time series ``X_ϵ``.
-- `ϑ::Real`:                    positive drift coefficient ``\vartheta``.
+- `ϑ::Real`:                    drift coefficient ``\vartheta``.
 - `Σ::Real`:                    positive diffusion coefficient ``\Sigma``.
-- `V=x -> x^4/4-x^2/2`:         defining potential function ``V`` for the invariant density.
+- `V`:                          defining potential function ``V`` for the invariant density.
 
 ---
 # Examples
@@ -187,15 +178,15 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 julia> Threads.nthreads()
 julia> using MDE_project
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
-julia> Δ_grad_Σ(data, 1, 1)
+julia> Δ_grad_Σ(data, 1, 1, NLDO()[1])
 ```
 
 ---
 See also [`Δ`](@ref).
 """
-function Δ_grad_Σ(data, ϑ, Σ, V = x -> x^4/4-x^2/2)
+function Δ_grad_Σ(data, ϑ, Σ, V)
     time_stamp = Dates.format(now(), "H:MM:SS")
-    @info "∇ $(time_stamp) - Gradient call with parameter value ($(ϑ),$(Σ))."
+    @info "∇ $(time_stamp) - Gradient call with parameter values ($(round(ϑ, digits=6)), $(round(Σ, digits=6)))."
     ∂Σ_convol(ϑ, Σ, V) + ∂Σ_multi_time_integral(data, ϑ, Σ, V)
 end
 
@@ -214,12 +205,12 @@ A properly discretized version of the gradient of the cost functional, given by
     &+ \frac{\beta^2 \Sigma}{\left( 1 + 2 \beta^2 \frac{\Sigma}{\vartheta} \right)^{3/2} \vartheta^2}.
 \end{aligned}
 ```
-is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``, obtained from a multiscale SDE, and ``\beta`` comes from [`k`](@ref).
+is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``, obtained from a multiscale SDE, and ``\beta`` comes from [`k`](@ref). The potential is here ``V(x) = x^2/2``. 
 
 ---
 # Arguments
 - `data::Vector{Real}`:         one-dimensional time series ``X_ϵ``.
-- `ϑ::Real`:                    positive drift coefficient ``\vartheta``.
+- `ϑ::Real`:                    drift coefficient ``\vartheta``.
 - `Σ::Real`:                    positive diffusion coefficient ``\Sigma``.
 
 ---
