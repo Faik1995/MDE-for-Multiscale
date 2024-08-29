@@ -88,7 +88,7 @@ with
 ```
 
 !!! warning 
-    The running times for a single evalutation can take some time due to the involved integrations, but it usually needs
+    The running times for a single evaluation can take some time due to the involved integrations, but it usually needs
     to be computed only once.
 
 ---
@@ -188,7 +188,7 @@ Here ``\mu(x, \vartheta, \Sigma, V)`` corresponds to [`μ`](@ref) with ``V(x) = 
 ```
 
 !!! warning 
-    The running times for a single evalutation can take some time due to the involved integrations, but it usually needs
+    The running times for a single evaluation can take some time due to the involved integrations, but it usually needs
     to be computed only once.
 
 ---
