@@ -1,7 +1,7 @@
 name = "MDEforM"
 uuid = "25eb15a5-a415-4ff1-88da-9d529a0202cf"
 authors = ["UQ"]
-version = ["0.1.0"]
+version = "0.1.0"
 
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
