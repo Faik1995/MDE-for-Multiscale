@@ -12,3 +12,7 @@ makedocs(
         "Asymptotic Variances of the MDE" => "MDE_asymptotic_variances.md",
     ],
 )
+
+deploydocs(
+    repo = "github.com/Faik1995/MDE-for-Multiscale.git",
+)
