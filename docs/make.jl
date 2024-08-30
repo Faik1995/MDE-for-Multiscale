@@ -15,5 +15,5 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/Faik1995/MDE-for-Multiscale.git",
+    repo = "github.com/Faik1995/MDE-for-Multiscale",
 )
