@@ -7,7 +7,7 @@
 # Jaroslav Borodavka, 20.08.2024
 
 # required packages
-using QuadGK
+#using QuadGK
 
 ########################################################################################################
 ## asymptotic variances for the MDE ##

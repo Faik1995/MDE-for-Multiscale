@@ -1,11 +1,12 @@
 push!(LOAD_PATH,"../src/")
-using Documenter, MDE_project
+using Documenter, MDEforM
 
 makedocs(
     sitename = "MDE for Multiscale Documentation",
+    modules = [MDEforM],
     authors = "Jaroslav Borodavka",
     pages = [
-        "Welcome" => "index.md",
+        "Home" => "index.md",
         "Multiscale System and Homogenized Limit Pairs" => "multiscale_limit_pairs.md",
         "Invariant Densities" => "invariant_densities.md",
         "Cost Functionals for the MDE" => "MDE_functionals.md",

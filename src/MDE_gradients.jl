@@ -87,7 +87,7 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 ```
 ```julia-repl
 julia> Threads.nthreads()
-julia> using MDE_project
+julia> using MDEforM
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
 julia> Δ_grad_ϑ(data, 1, 1, NLDO()[1])
 ```
@@ -176,7 +176,7 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 ```
 ```julia-repl
 julia> Threads.nthreads()
-julia> using MDE_project
+julia> using MDEforM
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
 julia> Δ_grad_Σ(data, 1, 1, NLDO()[1])
 ```
@@ -216,7 +216,7 @@ is implemented. Here, ``X_ϵ`` is a one-dimensional time series of length ``T``,
 ---
 # Examples
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> data = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
 julia> Δ_Gaussian1D_grad(data, 1, 1)
 ```

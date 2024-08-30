@@ -1,15 +1,15 @@
-# Welcome
+# Home
 
 This is the documentation website for "MDE for Multiscale"! For detailed theoretical and numerical information on the minimum distance estimation (MDE) method please refer to the accompanying article XXX.
 
-In order to use the module, clone the [GitHub repository](https://github.com/Faik1995/MDE-for-Multiscale) to your local machine, navigate through the Terminal to the directory with the
+In order to use the module, clone the [GitHub repository](https://github.com/Faik1995/MDE-for-Multiscale) to your local machine, navigate through the Terminal to the root directory containing the
 Project.toml file, start Julia and activate the project in the Terminal via
 ```
 $ julia --project=.
 ```
-Then hit ] and update the packages in the project
+Then hit ] and instantiate the packages in the project
 ```julia-repl
-(MDE_project) pkg> update 
+(MDE_project) pkg> instantiate 
 ```
 You may now use the module's functionality
 ```julia-repl

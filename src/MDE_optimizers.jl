@@ -7,7 +7,7 @@
 # Jaroslav Borodavka, 21.08.2024
 
 # required packages
-using Optim
+#using Optim
 
 ########################################################################################################
 ## optimizers for the MDE
@@ -42,7 +42,7 @@ is, in the given case, quadratic, i.e. ``V(x)=x^2/2``.
 ---
 # Examples
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> limit_drift_parameter = 1.0
 julia> data = Fast_chaotic_ϵ([1.0, 1.0, 1.0, 1.0], A=-limit_drift_parameter, B=0.0, λ=2/45, ϵ=0.1, T=1000)
 julia> MDE(data, "Fast Chaotic Noise", limit_drift_parameter, 10.0)
@@ -119,7 +119,7 @@ obtained from a multiscale SDE, ``\Delta_T`` is the associated cost functional o
 $ julia --threads 10 --project=. # start julia with 10 threads and activate project
 ```
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> limit_drift_parameter = 1.0
 julia> data = Fast_chaotic_ϵ([1.0, 1.0, 1.0, 1.0], A=limit_drift_parameter, B=1.0, λ=2/45, ϵ=10^(-3/2), T=100)
 julia> V = NLDO()[1]
@@ -193,12 +193,12 @@ The initial point `ϑ_initial` must satisfy certain parameter constraints since 
 - `data::::Array{Real, 2}`:             two-dimensional time series ``X_ϵ``.
 - `limit_diffusion::Array{Real, 2}`:    positive definite limit diffusion matrix ``\Sigma \in \mathbb{R}^{2 \times 2}``.
 - `ϑ_initial::Array{Real, 2}`:          initial point ``\vartheta_0 \in \mathbb{R}^{2 \times 2}`` of the numerical optimization procedure.
-- 'verbose::Bool=false':                         if `verbose = true`, then detailed information on the optimization will be printed in real-time.
+- 'verbose::Bool=false':                if `verbose = true`, then detailed information on the optimization will be printed in real-time.
 
 ---
 # Examples
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> M = [4 2;2 3]
 julia> σ = 1.5               
 julia> p1, p2 = (x -> sin(x), x -> 1/2*sin(x))     

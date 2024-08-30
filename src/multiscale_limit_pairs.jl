@@ -9,9 +9,9 @@
 # Jaroslav Borodavka, 08.08.2024
 
 # required packages
-using CairoMakie
-using DifferentialEquations
-using HCubature
+#using CairoMakie
+#using DifferentialEquations
+#using HCubature
 using LaTeXStrings
 
 ########################################################################################################

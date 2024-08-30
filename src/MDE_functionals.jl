@@ -11,9 +11,9 @@
 # Jaroslav Borodavka, 14.08.2024
 
 # required packages
-using Dates
-using LinearAlgebra
-using NaNMath
+#using Dates
+#using LinearAlgebra
+#using NaNMath
 
 ########################################################################################################
 ## cost functionals for the MDE
@@ -124,7 +124,7 @@ $ julia --threads 10 --project=. # start julia with 10 threads and activate proj
 ```
 ```julia-repl
 julia> Threads.nthreads()
-julia> using MDE_project
+julia> using MDEforM
 julia> data = Langevin_ϵ(1.0, func_config=NLDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
 julia> Δ(data, 1, 1, NLDO()[1])
 ```
@@ -167,7 +167,7 @@ See the main manuscript for details on this functional. It is the core object of
 ---
 # Examples
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> data = Langevin_ϵ(1.0, func_config=LDO(), α=2.0, σ=1.0, ϵ=0.1, T=100)[1]
 julia> Δ_Gaussian1D(data, 1, 1)
 ```
@@ -241,7 +241,7 @@ and is given by the covariance matrix of the invariant Gaussian density, and ``\
 ---
 # Examples
 ```julia-repl
-julia> using MDE_project
+julia> using MDEforM
 julia> M=[4 2;2 3]
 julia> σ = 5.0  
 julia> data = Langevin_ϵ_2D([-5.0, -5.0], func_config=(x-> cos(x), x -> 1/2*cos(x)), M=M, σ=σ, ϵ=0.1, T=100.0)[1]

@@ -1,4 +1,4 @@
-module MDE_project
+module MDEforM
 
 export Fast_OU_ϵ, Fast_OU_∞, LDA, NLDAM, NSDP
 export Langevin_ϵ, Langevin_∞, K, LDO, NLDO
